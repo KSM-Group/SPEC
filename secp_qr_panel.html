@@ -321,6 +321,15 @@ body::before {
   background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 16px; font-size: 13px; cursor: pointer; font-family: inherit;
 }
+
+.pin-key {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; font-size: 18px; font-weight: 700;
+  color: var(--text); cursor: pointer; font-family: inherit;
+  transition: all .15s;
+}
+.pin-key:hover { background: var(--border); }
+.pin-key:active { transform: scale(.92); }
 </style>
 </head>
 <body>
@@ -335,11 +344,6 @@ body::before {
     <div>
       <div class="header-clock" id="clock">00:00:00</div>
       <div class="header-date" id="date-display">—</div>
-    </div>
-    <div class="header-rotate">
-      <span>Zmiana kodu:</span>
-      <span class="rotate-timer" id="rotate-timer">15:00</span>
-      
     </div>
     <button class="fs-btn" onclick="toggleFullscreen()">⛶ Pełny ekran</button>
     <button class="fs-btn" onclick="openSettings()">⚙️</button>
@@ -457,6 +461,37 @@ body::before {
   <div class="status-item">🔒 Zabezpieczenie: HMAC</div>
 </div>
 
+
+<!-- PIN OVERLAY -->
+<div class="settings-overlay" id="pin-overlay" onclick="closePinOutside(event)">
+  <div class="settings-panel" style="max-width:280px;text-align:center;">
+    <h2 style="margin-bottom:8px;">🔒 Panel admina</h2>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">Wprowadź PIN aby kontynuować</p>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;" id="pin-dots">
+      <div style="width:12px;height:12px;border-radius:50%;background:#1e2d45;" id="pd0"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#1e2d45;" id="pd1"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#1e2d45;" id="pd2"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#1e2d45;" id="pd3"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key" onclick="pinClear()" style="font-size:11px;">CLR</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key" onclick="pinBack()">⌫</button>
+    </div>
+    <p style="font-size:11px;color:#ef4444;display:none;" id="pin-error">Błędny PIN</p>
+    <button class="btn-cancel" onclick="closePinOverlay()" style="width:100%;margin-top:4px;">Anuluj</button>
+  </div>
+</div>
+
 <!-- SETTINGS -->
 <div class="settings-overlay" id="settings-overlay" onclick="closeSettingsOutside(event)">
   <div class="settings-panel">
@@ -489,7 +524,11 @@ body::before {
     </div>
     <div class="form-row">
       <label>URL aplikacji pracownika</label>
-      <input type="text" id="s-empurl" placeholder="https://ksm-group.github.io/secp-employee/"/>
+      <input type="text" id="s-empurl" placeholder="https://ksm-group.github.io/secp-app/secp_employee.html"/>
+    </div>
+    <div class="form-row">
+      <label>Zmień PIN admina</label>
+      <input type="text" id="s-pin" placeholder="4 cyfry" maxlength="4" value=""/>
     </div>
     <div class="settings-btns">
       <button class="btn-cancel" onclick="closeSettings()">Anuluj</button>
@@ -644,8 +683,8 @@ function updateProgressBars() {
 // ── CYCLE DOTS ────────────────────────────────────────────────
 function buildCycleDots() {
   let container = document.getElementById('cycle-dots');
+  if (!container) return;
   container.innerHTML = '';
-  // Show only first 10 dots to save space
   let show = Math.min(cfg.cycle, 10);
   for (let i = 0; i < show; i++) {
     let dot = document.createElement('div');
@@ -656,6 +695,7 @@ function buildCycleDots() {
 }
 
 function updateCycleDots() {
+  if (!document.getElementById('cycle-dots')) return;
   let show = Math.min(cfg.cycle, 10);
   for (let i = 0; i < show; i++) {
     let dot = document.getElementById('dot-' + i);
@@ -683,15 +723,73 @@ function saveSettings() {
   cfg.interval = parseInt(document.getElementById('s-interval').value);
   cfg.cycle    = parseInt(document.getElementById('s-cycle').value);
   cfg.empUrl   = document.getElementById('s-empurl').value;
+  let newPin = document.getElementById('s-pin').value;
+  if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) { adminPin = newPin; localStorage.setItem('secp-admin-pin', newPin); }
   localStorage.setItem('secp-qr-panel-cfg', JSON.stringify(cfg));
   closeSettings();
   buildCycleDots();
   initQRs();
 }
 
-function openSettings() { document.getElementById('settings-overlay').classList.add('open'); }
+function _openSettingsPanel() { document.getElementById('settings-overlay').classList.add('open'); }
 function closeSettings() { document.getElementById('settings-overlay').classList.remove('open'); }
 function closeSettingsOutside(e) { if (e.target === document.getElementById('settings-overlay')) closeSettings(); }
+
+
+// ── PIN ───────────────────────────────────────────────────────
+let pinBuffer = '';
+let adminPin = localStorage.getItem('secp-admin-pin') || '7777';
+
+function openSettings() {
+  pinBuffer = '';
+  updatePinDots();
+  document.getElementById('pin-error').style.display = 'none';
+  document.getElementById('pin-overlay').classList.add('open');
+}
+
+function closePinOverlay() {
+  document.getElementById('pin-overlay').classList.remove('open');
+  pinBuffer = '';
+}
+
+function closePinOutside(e) {
+  if (e.target === document.getElementById('pin-overlay')) closePinOverlay();
+}
+
+function pinKey(k) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += k;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(() => {
+      if (pinBuffer === adminPin) {
+        closePinOverlay();
+        document.getElementById('settings-overlay').classList.add('open');
+      } else {
+        document.getElementById('pin-error').style.display = 'block';
+        pinBuffer = '';
+        updatePinDots();
+      }
+    }, 200);
+  }
+}
+
+function pinBack() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+}
+
+function pinClear() {
+  pinBuffer = '';
+  updatePinDots();
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    let dot = document.getElementById('pd' + i);
+    if (dot) dot.style.background = i < pinBuffer.length ? '#1a56db' : '#1e2d45';
+  }
+}
 
 // ── FULLSCREEN ────────────────────────────────────────────────
 function toggleFullscreen() {
