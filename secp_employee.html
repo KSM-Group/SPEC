@@ -401,7 +401,7 @@ body {
 .stat-label { font-size: 13px; color: var(--text2); }
 .stat-value { font-size: 14px; font-weight: 700; color: var(--text); }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 </head>
 <body>
 
@@ -1011,13 +1011,22 @@ function openCamera() {
         let imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url); // Free memory immediately
         input.value = ''; // Reset so same photo can't be reused
-        if (typeof jsQR !== 'undefined') {
-          let code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-          if (code) {
-            onQRFound(code.data);
-          } else {
-            showEmpToast('Nie znaleziono QR — spróbuj ponownie');
-          }
+        try {
+          let hints = new Map();
+          hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+          let reader = new ZXing.BrowserQRCodeReader();
+          let imgEl = document.createElement('img');
+          imgEl.src = url;
+          imgEl.onload = async function() {
+            try {
+              let result = await reader.decodeFromImageElement(imgEl);
+              onQRFound(result.getText());
+            } catch(e) {
+              showEmpToast('Nie znaleziono QR — spróbuj ponownie');
+            }
+          };
+        } catch(e) {
+          showEmpToast('Blad skanowania');
         }
       };
       img.src = url;
