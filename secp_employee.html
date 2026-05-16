@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<meta name="theme-color" content="#1a56db"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="SECP"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="logo.png"/>
+<title>SECP — Pracownik</title>
+<style>
+:root {
+  --bg: #f0f4ff;
+  --surface: #ffffff;
+  --surface2: #f8faff;
+  --accent: #1a56db;
+  --accent2: #0ea5e9;
+  --green: #10b981;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --purple: #8b5cf6;
+  --text: #0e1117;
+  --text2: #4b5563;
+  --text3: #9ca3af;
+  --border: #e5e7eb;
+  --grad: linear-gradient(135deg, #1a56db, #0ea5e9);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  max-width: 430px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ── SCREENS ── */
+.screen { display: none; min-height: 100vh; flex-direction: column; }
+.screen.active { display: flex; }
+
+/* ── LOGIN SCREEN ── */
+#screen-login {
+  background: linear-gradient(160deg, #1a3a6a 0%, #1a56db 50%, #0ea5e9 100%);
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  padding-top: calc(40px + var(--safe-top));
+}
+.login-logo {
+  width: 80px; height: 80px;
+  background: rgba(255,255,255,.15);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255,255,255,.2);
+  border-radius: 24px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+  margin-bottom: 20px;
+}
+.login-title {
+  font-size: 28px; font-weight: 800; color: #fff;
+  letter-spacing: -0.5px; margin-bottom: 6px; text-align: center;
+}
+.login-sub {
+  font-size: 14px; color: rgba(255,255,255,.7);
+  margin-bottom: 32px; text-align: center;
+}
+.login-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.login-card h2 {
+  font-size: 16px; font-weight: 700; color: var(--text);
+  margin-bottom: 16px;
+}
+.input-group {
+  display: flex; flex-direction: column; gap: 5px;
+  margin-bottom: 14px;
+}
+.input-group label {
+  font-size: 12px; font-weight: 600; color: var(--text2);
+}
+.input-group input {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .2s;
+}
+.input-group input:focus { border-color: var(--accent); }
+.login-btn {
+  width: 100%;
+  background: var(--grad);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  margin-top: 4px;
+  box-shadow: 0 4px 16px rgba(26,86,219,.3);
+}
+.login-error {
+  font-size: 12px; color: var(--red);
+  text-align: center; margin-top: 8px;
+  display: none;
+}
+
+/* ── MAIN SCREEN ── */
+#screen-main { background: var(--bg); }
+
+.top-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  padding-top: calc(12px + var(--safe-top));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky; top: 0; z-index: 10;
+  box-shadow: 0 1px 8px rgba(0,0,0,.06);
+}
+.top-bar-left { display: flex; align-items: center; gap: 10px; }
+.avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--grad);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: #fff;
+}
+.emp-name-bar { font-size: 14px; font-weight: 600; color: var(--text); }
+.emp-group-bar { font-size: 11px; color: var(--text3); }
+.status-pill {
+  font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 20px;
+}
+.status-pill.working { background: #dcfce7; color: #15803d; }
+.status-pill.break   { background: #fef3c7; color: #92400e; }
+.status-pill.out     { background: #fee2e2; color: #991b1b; }
+.status-pill.idle    { background: #f3f4f6; color: #6b7280; }
+
+/* MAIN CONTENT */
+.main-content {
+  flex: 1;
+  padding: 20px 16px;
+  padding-bottom: calc(80px + var(--safe-bottom));
+}
+
+/* TIME DISPLAY */
+.time-card {
+  background: var(--grad);
+  border-radius: 20px;
+  padding: 24px 20px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(26,86,219,.25);
+}
+.time-card::before {
+  content: "";
+  position: absolute;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+  top: -60px; right: -60px;
+}
+.time-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,.7);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-bottom: 4px;
+}
+.time-card-value {
+  font-size: 42px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.time-card-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,.6);
+  margin-top: 6px;
+}
+.time-card-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+.time-card-stat {
+  background: rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 8px 12px;
+  flex: 1;
+}
+.time-card-stat .v { font-size: 16px; font-weight: 700; color: #fff; }
+.time-card-stat .l { font-size: 10px; color: rgba(255,255,255,.6); margin-top: 1px; }
+
+/* ACTION BUTTONS */
+.actions-title {
+  font-size: 12px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .8px;
+  margin-bottom: 12px;
+}
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.action-btn {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all .15s;
+  -webkit-user-select: none;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+.action-btn:active { transform: scale(.96); }
+.action-btn.disabled { opacity: .4; cursor: not-allowed; }
+.action-btn.active-state { border-color: currentColor; }
+
+.action-btn .btn-icon { font-size: 28px; line-height: 1; }
+.action-btn .btn-label { font-size: 13px; font-weight: 700; color: var(--text); }
+.action-btn .btn-sub { font-size: 10px; color: var(--text3); text-align: center; }
+
+.action-btn.entry  { --c: #10b981; }
+.action-btn.exit   { --c: #ef4444; }
+.action-btn.bstart { --c: #f59e0b; }
+.action-btn.bend   { --c: #8b5cf6; }
+.action-btn.delegation { --c: #0ea5e9; grid-column: 1/-1; flex-direction: row; justify-content: center; padding: 14px; }
+
+.action-btn.active-state { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, white); }
+.action-btn.active-state .btn-label { color: var(--c); }
+
+/* HISTORY */
+.history-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.history-header {
+  padding: 14px 16px;
+  font-size: 13px; font-weight: 700; color: var(--text);
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.history-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f9fafb;
+}
+.history-item:last-child { border-bottom: none; }
+.history-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%; flex-shrink: 0;
+}
+.history-time { font-size: 13px; font-weight: 600; color: var(--text); min-width: 52px; }
+.history-action { font-size: 12px; color: var(--text2); flex: 1; }
+.history-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+}
+
+/* DELEGATION MODAL */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: none; align-items: flex-end; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  padding: 24px 20px;
+  padding-bottom: calc(24px + var(--safe-bottom));
+  width: 100%;
+  max-width: 430px;
+}
+.modal-handle {
+  width: 40px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.modal-sub { font-size: 13px; color: var(--text3); margin-bottom: 20px; }
+.modal-input {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  margin-bottom: 14px;
+  resize: none;
+}
+.modal-input:focus { border-color: var(--accent); }
+.modal-btn {
+  width: 100%;
+  background: var(--grad);
+  color: #fff; border: none;
+  border-radius: 12px; padding: 14px;
+  font-size: 15px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+.modal-btn-cancel {
+  width: 100%; background: transparent;
+  color: var(--text3); border: none;
+  padding: 12px; font-size: 14px;
+  cursor: pointer; font-family: inherit;
+  margin-top: 6px;
+}
+
+/* CONFIRM OVERLAY */
+.confirm-overlay {
+  position: fixed; inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center; justify-content: center;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(6px);
+}
+.confirm-overlay.show { display: flex; }
+.confirm-box {
+  background: var(--surface);
+  border-radius: 24px;
+  padding: 32px 24px;
+  text-align: center;
+  width: 300px;
+  animation: pop .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes pop { from{transform:scale(.8);opacity:0;} to{transform:scale(1);opacity:1;} }
+.confirm-icon { font-size: 52px; margin-bottom: 12px; }
+.confirm-title { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+.confirm-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+.confirm-time { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* BOTTOM NAV */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 430px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding-bottom: var(--safe-bottom);
+  z-index: 10;
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 3px;
+  padding: 10px 4px;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 10px; font-weight: 600;
+}
+.nav-item.active { color: var(--accent); }
+.nav-item .nav-icon { font-size: 20px; }
+
+/* STATS SCREEN */
+#screen-stats { background: var(--bg); }
+.stats-content { padding: 20px 16px; padding-bottom: calc(80px + var(--safe-bottom)); }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.stat-card-title { font-size: 12px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
+.stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
+.stat-row:last-child { border-bottom: none; }
+.stat-label { font-size: 13px; color: var(--text2); }
+.stat-value { font-size: 14px; font-weight: 700; color: var(--text); }
+</style>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+#qr-reader { width: 100% !important; border: none !important; }
+#qr-reader video { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+#qr-reader__scan_region { width: 100% !important; height: 100% !important; }
+#qr-reader__scan_region img { display: none !important; }
+#qr-reader__dashboard { background: rgba(0,0,0,.85) !important; padding: 12px !important; }
+#qr-reader__dashboard_section_csr button { 
+  background: linear-gradient(135deg,#1a56db,#0ea5e9) !important; 
+  color: #fff !important; border: none !important; 
+  border-radius: 8px !important; padding: 10px 20px !important;
+  font-size: 14px !important; font-family: inherit !important; cursor: pointer !important;
+}
+#qr-reader__status_span { color: rgba(255,255,255,.7) !important; font-size: 13px !important; }
+#qr-reader__camera_selection { 
+  background: var(--surface2, #1a1e28) !important; color: #fff !important;
+  border: 1px solid #253550 !important; border-radius: 6px !important; padding: 6px 10px !important;
+}
+
+<style>
+#qr-reader { background: #000 !important; }
+#qr-reader video { width: 100% !important; height: 100% !important; object-fit: cover !important; position: absolute !important; top: 0 !important; left: 0 !important; }
+#qr-reader__scan_region { width: 100% !important; height: 100% !important; position: relative !important; flex: 1 !important; }
+#qr-reader__dashboard { display: none !important; }
+#qr-reader__camera_permission_button { display: none !important; }
+#qr-reader img { display: none !important; }
+#qr-reader__status_span { display: none !important; }
+#qr-reader__header_message { display: none !important; }
+</style>
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="screen active" id="screen-login">
+  <div class="login-logo">👤</div>
+  <div class="login-title">SECP</div>
+  <div class="login-sub">System Ewidencji Czasu Pracy</div>
+  <div class="login-card">
+    <h2>Zaloguj się</h2>
+    <div class="input-group">
+      <label>Imię</label>
+      <input type="text" id="inp-firstname" placeholder="np. Jan" autocomplete="given-name"/>
+    </div>
+    <div class="input-group">
+      <label>Nazwisko</label>
+      <input type="text" id="inp-lastname" placeholder="np. Kowalski" autocomplete="family-name"/>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Zaloguj się →</button>
+    <div class="login-error" id="login-error">Nie znaleziono pracownika w bazie SECP</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="screen" id="screen-main">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <div class="avatar" id="emp-avatar">JK</div>
+      <div>
+        <div class="emp-name-bar" id="emp-name-bar">Jan Kowalski</div>
+        <div class="emp-group-bar" id="emp-group-bar">I ZMIANA</div>
+      </div>
+    </div>
+    <div class="status-pill idle" id="work-status-pill">Nieaktywny</div>
+  </div>
+
+  <div class="main-content">
+    <!-- TIME CARD -->
+    <div class="time-card">
+      <div class="time-card-label">Czas pracy dziś</div>
+      <div class="time-card-value" id="work-timer">00:00:00</div>
+      <div class="time-card-sub" id="work-timer-sub">Rozpocznij pracę skanując kod QR lub klikając poniżej</div>
+      <div class="time-card-row">
+        <div class="time-card-stat">
+          <div class="v" id="stat-start">—</div>
+          <div class="l">Rozpoczęcie</div>
+        </div>
+        <div class="time-card-stat">
+          <div class="v" id="stat-break">0 min</div>
+          <div class="l">Przerwy</div>
+        </div>
+        <div class="time-card-stat">
+          <div class="v" id="stat-net">0h 0m</div>
+          <div class="l">Netto</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR INFO -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">
+      <div style="font-size:32px;flex-shrink:0;">📱</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Rejestracja przez QR</div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.5;">Wejście, wyjście i przerwy rejestrujesz skanując kod QR przy wejściu do firmy.</div>
+      </div>
+    </div>
+
+    <!-- DELEGATION -->
+    <div class="actions-title">Akcje</div>
+    <div style="margin-bottom:16px;">
+      <button class="action-btn delegation" onclick="openDelegation()" style="width:100%;display:flex;flex-direction:row;justify-content:center;align-items:center;gap:10px;padding:16px;border-radius:14px;">
+        <span class="btn-icon" style="font-size:22px;">📋</span>
+        <span class="btn-label">ZGŁOŚ DELEGACJĘ</span>
+      </button>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="history-card">
+      <div class="history-header">
+        <span>Historia dziś</span>
+        <span style="font-size:11px;color:var(--text3)" id="history-date">—</span>
+      </div>
+      <div id="history-list">
+        <div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">Brak zdarzeń</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="showScreen('main')">
+      <span class="nav-icon">🏠</span>Główna
+    </div>
+    <div class="nav-item" onclick="showScreen('stats')">
+      <span class="nav-icon">📊</span>Statystyki
+    </div>
+    <div class="nav-item" onclick="openCamera()">
+      <span class="nav-icon">📷</span>Skanuj QR
+    </div>
+    <div class="nav-item" onclick="doLogout()">
+      <span class="nav-icon">👤</span>Wyloguj
+    </div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="screen" id="screen-stats">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <div class="avatar" id="emp-avatar2">JK</div>
+      <div><div class="emp-name-bar" id="emp-name-bar2">Jan Kowalski</div></div>
+    </div>
+  </div>
+  <div class="stats-content">
+    <div class="stat-card">
+      <div class="stat-card-title">📅 Dziś</div>
+      <div class="stat-row"><span class="stat-label">Godziny pracy</span><span class="stat-value" id="s-today-h">0h 0m</span></div>
+      <div class="stat-row"><span class="stat-label">Przerwy</span><span class="stat-value" id="s-today-b">0 min</span></div>
+      <div class="stat-row"><span class="stat-label">Wejście</span><span class="stat-value" id="s-today-in">—</span></div>
+      <div class="stat-row"><span class="stat-label">Wyjście</span><span class="stat-value" id="s-today-out">—</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-title">📆 Ten tydzień</div>
+      <div class="stat-row"><span class="stat-label">Łącznie godzin</span><span class="stat-value" id="s-week-h">0h 0m</span></div>
+      <div class="stat-row"><span class="stat-label">Dni przepracowane</span><span class="stat-value" id="s-week-d">0</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-title">🗓️ Ten miesiąc</div>
+      <div class="stat-row"><span class="stat-label">Łącznie godzin</span><span class="stat-value" id="s-month-h">0h 0m</span></div>
+      <div class="stat-row"><span class="stat-label">Dni przepracowane</span><span class="stat-value" id="s-month-d">0</span></div>
+      <div class="stat-row"><span class="stat-label">Spóźnienia</span><span class="stat-value" id="s-month-late" style="color:var(--amber)">0</span></div>
+      <div class="stat-row"><span class="stat-label">Delegacje</span><span class="stat-value" id="s-month-del">0</span></div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="nav-item" onclick="showScreen('main')"><span class="nav-icon">🏠</span>Główna</div>
+    <div class="nav-item active" onclick="showScreen('stats')"><span class="nav-icon">📊</span>Statystyki</div>
+    <div class="nav-item" onclick="openCamera()"><span class="nav-icon">📷</span>Skanuj QR</div>
+    <div class="nav-item" onclick="doLogout()"><span class="nav-icon">👤</span>Wyloguj</div>
+  </div>
+</div>
+
+
+
+<div id="qr-reader-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:999;flex-direction:column;height:100vh;overflow:hidden;">
+  <div style="padding:14px 20px;display:flex;align-items:center;background:rgba(0,0,0,.9);">
+    <button onclick="closeCam()" style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:9px 16px;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;">✕ Zamknij</button>
+    <div style="flex:1;text-align:center;font-size:14px;font-weight:600;color:#fff;">Skieruj na kod QR</div>
+  </div>
+  <div id="qr-reader" style="flex:1;width:100%;max-width:100%;overflow:hidden;"></div>
+</div>
+
+<canvas id="qr-canvas" style="display:none;"></canvas>
+
+<!-- DELEGATION MODAL -->
+<div class="modal-overlay" id="delegation-modal" onclick="closeDelegationOutside(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📋 Zgłoszenie delegacji</div>
+    <div class="modal-sub">Opisz cel oddelegowania do innej czynności. Admin zatwierdzi lub odrzuci Twój wniosek.</div>
+    <textarea class="modal-input" id="delegation-text" rows="4" placeholder="Opisz cel delegacji, miejsce, szacowany czas..."></textarea>
+    <button class="modal-btn" onclick="submitDelegation()">Wyślij wniosek</button>
+    <button class="modal-btn-cancel" onclick="closeDelegation()">Anuluj</button>
+  </div>
+</div>
+
+<!-- CONFIRM OVERLAY -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirm-icon">✅</div>
+    <div class="confirm-title" id="confirm-title">Zarejestrowano!</div>
+    <div class="confirm-time" id="confirm-time">00:00</div>
+    <div class="confirm-sub" id="confirm-sub">Zdarzenie zostało zapisane</div>
+  </div>
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────
+let currentEmployee = null;
+let workState = 'idle'; // idle | working | break
+let workStartTime = null;
+let breakStartTime = null;
+let totalBreakMs = 0;
+let todayEvents = [];
+let workTimerInterval = null;
+
+const SECP_DATA_KEY = 'secp-emp-data';
+const SECP_GOOGLE_SCRIPT = 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec';
+
+// ── INIT ──────────────────────────────────────────────────────
+window.onload = function() {
+  // Check URL params for QR scan - only process ONCE
+  let params = new URLSearchParams(window.location.search);
+  let action = params.get('action');
+  let token  = params.get('token');
+  // Clear URL params immediately to prevent re-processing on refresh
+  if (action || token) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+  // Check if this action was already processed (same token)
+  let lastToken = sessionStorage.getItem('last-qr-token');
+  if (token && token === lastToken) {
+    action = null; token = null; // Already processed
+  }
+  if (token) sessionStorage.setItem('last-qr-token', token);
+
+  // Check if already logged in
+  let saved = localStorage.getItem('secp-emp-session');
+  if (saved) {
+    currentEmployee = JSON.parse(saved);
+    loadTodayState();
+    showScreen('main');
+    updateUI();
+    // Only process QR action if we have BOTH action AND token from URL (not from sessionStorage)
+    if (action && token) {
+      setTimeout(() => processQRAction(action, token), 500);
+    }
+    // Clear any pending actions on normal refresh (no URL params)
+    if (!action && !token) {
+      sessionStorage.removeItem('pending-action');
+      sessionStorage.removeItem('pending-token');
+    }
+  } else if (action && token) {
+    // Store pending action for after login
+    sessionStorage.setItem('pending-action', action);
+    sessionStorage.setItem('pending-token', token);
+  }
+};
+
+// ── LOGIN ─────────────────────────────────────────────────────
+async function doLogin() {
+  let first = document.getElementById('inp-firstname').value.trim();
+  let last  = document.getElementById('inp-lastname').value.trim();
+  if (!first || !last) return;
+
+  let fullName = first + ' ' + last;
+  let err = document.getElementById('login-error');
+
+  // Load employee list from Google Sheets
+  try {
+    let resp = await fetch(SECP_GOOGLE_SCRIPT);
+    let raw = await resp.text();
+    let data = JSON.parse(raw);
+    let employees = data.employees || [];
+    let found = employees.find(e => e.name.toLowerCase() === fullName.toLowerCase());
+
+    if (!found) {
+      err.style.display = 'block';
+      err.textContent = 'Nie znaleziono "' + fullName + '" w bazie SECP';
+      return;
+    }
+
+    currentEmployee = found;
+    let groups = data.groups || [];
+    let group = groups.find(g => g.id === found.group);
+    currentEmployee.groupName = group ? group.name : '';
+
+    localStorage.setItem('secp-emp-session', JSON.stringify(currentEmployee));
+    loadTodayState();
+    showScreen('main');
+    updateUI();
+
+    // Process pending QR action - only if we have a valid token
+    let pendingAction = sessionStorage.getItem('pending-action');
+    let pendingToken  = sessionStorage.getItem('pending-token');
+    let lastToken = sessionStorage.getItem('last-qr-token');
+    if (pendingAction && pendingToken && pendingToken !== lastToken) {
+      sessionStorage.removeItem('pending-action');
+      sessionStorage.removeItem('pending-token');
+      sessionStorage.setItem('last-qr-token', pendingToken);
+      setTimeout(() => processQRAction(pendingAction, pendingToken), 500);
+    } else {
+      sessionStorage.removeItem('pending-action');
+      sessionStorage.removeItem('pending-token');
+    }
+  } catch(e) {
+    // Fallback: allow login without verification
+    currentEmployee = { name: fullName, group: '', groupName: '' };
+    localStorage.setItem('secp-emp-session', JSON.stringify(currentEmployee));
+    loadTodayState();
+    showScreen('main');
+    updateUI();
+  }
+}
+
+function doLogout() {
+  if (!confirm('Wylogować się?')) return;
+  localStorage.removeItem('secp-emp-session');
+  currentEmployee = null;
+  workState = 'idle';
+  workStartTime = null;
+  clearInterval(workTimerInterval);
+  showScreen('login');
+}
+
+// ── QR ACTION ─────────────────────────────────────────────────
+function processQRAction(action, token) {
+  // In real impl: verify token against server
+  // For now: accept and register
+  registerAction(action, true);
+}
+
+// ── REGISTER ACTION ───────────────────────────────────────────
+function registerAction(action, fromQR = false) {
+  let now = new Date();
+  let timeStr = now.toLocaleTimeString('pl-PL', { hour:'2-digit', minute:'2-digit' });
+
+  // State machine
+  if (action === 'entry') {
+    if (workState === 'idle') {
+      workStartTime = now;
+      workState = 'working';
+      startWorkTimer();
+    } else if (workState === 'break') {
+      // Return from break
+      if (breakStartTime) totalBreakMs += now - breakStartTime;
+      breakStartTime = null;
+      workState = 'working';
+    }
+  } else if (action === 'exit') {
+    if (workState === 'working' || workState === 'break') {
+      workState = 'idle';
+      clearInterval(workTimerInterval);
+    }
+  } else if (action === 'break-start') {
+    if (workState === 'working') {
+      breakStartTime = now;
+      workState = 'break';
+    }
+  } else if (action === 'break-end') {
+    if (workState === 'break') {
+      if (breakStartTime) totalBreakMs += now - breakStartTime;
+      breakStartTime = null;
+      workState = 'working';
+    }
+  }
+
+  // Log event
+  let event = { action, time: timeStr, timestamp: now.getTime(), fromQR };
+  todayEvents.push(event);
+  saveTodayState();
+  updateUI();
+  renderHistory();
+  syncToGoogle(event);
+  showConfirm(action, timeStr);
+}
+
+// ── WORK TIMER ────────────────────────────────────────────────
+function startWorkTimer() {
+  clearInterval(workTimerInterval);
+  workTimerInterval = setInterval(updateWorkTimer, 1000);
+  updateWorkTimer();
+}
+
+function updateWorkTimer() {
+  if (!workStartTime || workState === 'idle') return;
+  let now = new Date();
+  let totalMs = now - workStartTime - totalBreakMs;
+  if (workState === 'break' && breakStartTime) totalMs -= (now - breakStartTime);
+  totalMs = Math.max(0, totalMs);
+
+  let h = Math.floor(totalMs / 3600000);
+  let m = Math.floor((totalMs % 3600000) / 60000);
+  let s = Math.floor((totalMs % 60000) / 1000);
+
+  document.getElementById('work-timer').textContent =
+    String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+
+  let breakMin = Math.floor(totalBreakMs / 60000);
+  if (workState === 'break' && breakStartTime) breakMin += Math.floor((now - breakStartTime) / 60000);
+  document.getElementById('stat-break').textContent = breakMin + ' min';
+  document.getElementById('stat-net').textContent = h + 'h ' + m + 'm';
+
+  // Sync stats
+  document.getElementById('s-today-h').textContent = h + 'h ' + m + 'm';
+  document.getElementById('s-today-b').textContent = breakMin + ' min';
+}
+
+// ── UI UPDATE ─────────────────────────────────────────────────
+function updateUI() {
+  if (!currentEmployee) return;
+
+  // Names
+  let parts = currentEmployee.name.split(' ');
+  let initials = (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+  document.getElementById('emp-avatar').textContent = initials;
+  document.getElementById('emp-avatar2').textContent = initials;
+  document.getElementById('emp-name-bar').textContent = currentEmployee.name;
+  document.getElementById('emp-name-bar2').textContent = currentEmployee.name;
+  document.getElementById('emp-group-bar').textContent = currentEmployee.groupName || 'Pracownik';
+
+  // Status pill
+  let pill = document.getElementById('work-status-pill');
+  let statusMap = {
+    idle: ['Nieaktywny', 'idle'],
+    working: ['W pracy', 'working'],
+    break: ['Na przerwie', 'break']
+  };
+  let [label, cls] = statusMap[workState] || ['Nieaktywny', 'idle'];
+  pill.textContent = label;
+  pill.className = 'status-pill ' + cls;
+
+  // Sub text
+  let subMap = {
+    idle: 'Nie rozpoczęto pracy',
+    working: 'Pracujesz od ' + (workStartTime ? workStartTime.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'}) : '—'),
+    break: 'Na przerwie...'
+  };
+  document.getElementById('work-timer-sub').textContent = subMap[workState] || '';
+
+  // Start time
+  document.getElementById('stat-start').textContent = workStartTime
+    ? workStartTime.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'})
+    : '—';
+
+  // History date
+  document.getElementById('history-date').textContent =
+    new Date().toLocaleDateString('pl-PL', {day:'numeric',month:'long'});
+
+  // Button states
+  renderHistory();
+  updateStats();
+
+  if (workState === 'working') startWorkTimer();
+}
+
+function updateButtonStates() {
+  let btnEntry  = document.getElementById('btn-entry');
+  let btnExit   = document.getElementById('btn-exit');
+  let btnBStart = document.getElementById('btn-bstart');
+  let btnBEnd   = document.getElementById('btn-bend');
+
+  [btnEntry, btnExit, btnBStart, btnBEnd].forEach(b => b.classList.remove('active-state','disabled'));
+
+  if (workState === 'idle') {
+    btnEntry.classList.add('active-state');
+    btnExit.classList.add('disabled');
+    btnBStart.classList.add('disabled');
+    btnBEnd.classList.add('disabled');
+  } else if (workState === 'working') {
+    btnBStart.classList.add('active-state');
+    btnExit.classList.add('active-state');
+    btnEntry.classList.add('disabled');
+    btnBEnd.classList.add('disabled');
+  } else if (workState === 'break') {
+    btnBEnd.classList.add('active-state');
+    btnEntry.classList.add('active-state');
+    btnExit.classList.add('disabled');
+    btnBStart.classList.add('disabled');
+  }
+}
+
+function renderHistory() {
+  let list = document.getElementById('history-list');
+  if (!todayEvents.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">Brak zdarzeń</div>';
+    return;
+  }
+
+  let colors = { entry:'#10b981', exit:'#ef4444', 'break-start':'#f59e0b', 'break-end':'#8b5cf6' };
+  let labels = { entry:'Wejście', exit:'Wyjście', 'break-start':'Start przerwy', 'break-end':'Koniec przerwy' };
+  let icons  = { entry:'🟢', exit:'🔴', 'break-start':'🟡', 'break-end':'🟣' };
+
+  list.innerHTML = [...todayEvents].reverse().map(e =>
+    '<div class="history-item">' +
+    '<div class="history-dot" style="background:' + colors[e.action] + '"></div>' +
+    '<div class="history-time">' + e.time + '</div>' +
+    '<div class="history-action">' + icons[e.action] + ' ' + labels[e.action] + '</div>' +
+    '<div class="history-badge" style="background:' + colors[e.action] + '20;color:' + colors[e.action] + '">' +
+    (e.fromQR ? 'QR' : 'Manual') + '</div></div>'
+  ).join('');
+}
+
+function updateStats() {
+  // Today exit time
+  let exits = todayEvents.filter(e => e.action === 'exit');
+  let lastExit = exits.length ? exits[exits.length-1].time : '—';
+  document.getElementById('s-today-in').textContent = workStartTime
+    ? workStartTime.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'}) : '—';
+  document.getElementById('s-today-out').textContent = lastExit;
+}
+
+// ── CONFIRM OVERLAY ───────────────────────────────────────────
+function showConfirm(action, time) {
+  let icons  = { entry:'✅', exit:'👋', 'break-start':'☕', 'break-end':'💪' };
+  let titles = { entry:'Wejście zarejestrowane!', exit:'Wyjście zarejestrowane!', 'break-start':'Przerwa rozpoczęta!', 'break-end':'Przerwa zakończona!' };
+  let subs   = { entry:'Miłej pracy!', exit:'Do zobaczenia!', 'break-start':'Odpoczywaj!', 'break-end':'Do roboty!' };
+
+  document.getElementById('confirm-icon').textContent  = icons[action] || '✅';
+  document.getElementById('confirm-title').textContent = titles[action] || 'Zarejestrowano!';
+  document.getElementById('confirm-time').textContent  = time;
+  document.getElementById('confirm-sub').textContent   = subs[action] || '';
+  document.getElementById('confirm-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('confirm-overlay').classList.remove('show'), 2500);
+}
+
+// ── DELEGATION ────────────────────────────────────────────────
+function openDelegation() { document.getElementById('delegation-modal').classList.add('open'); }
+function closeDelegation() { document.getElementById('delegation-modal').classList.remove('open'); }
+function closeDelegationOutside(e) { if(e.target === document.getElementById('delegation-modal')) closeDelegation(); }
+
+async function submitDelegation() {
+  let text = document.getElementById('delegation-text').value.trim();
+  if (!text) return;
+
+  let now = new Date();
+  let entry = {
+    action: 'delegation',
+    time: now.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'}),
+    timestamp: now.getTime(),
+    text,
+    employee: currentEmployee ? currentEmployee.name : '?',
+    status: 'pending'
+  };
+
+  todayEvents.push(entry);
+  saveTodayState();
+  closeDelegation();
+  document.getElementById('delegation-text').value = '';
+  showConfirm('entry', now.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'}));
+  syncToGoogle(entry);
+}
+
+// ── PERSIST ───────────────────────────────────────────────────
+function saveTodayState() {
+  let today = new Date().toISOString().slice(0,10);
+  let state = {
+    date: today,
+    workState,
+    workStartTime: workStartTime ? workStartTime.getTime() : null,
+    breakStartTime: breakStartTime ? breakStartTime.getTime() : null,
+    totalBreakMs,
+    todayEvents
+  };
+  localStorage.setItem('secp-today-' + (currentEmployee ? currentEmployee.name : ''), JSON.stringify(state));
+}
+
+function loadTodayState() {
+  if (!currentEmployee) return;
+  let today = new Date().toISOString().slice(0,10);
+  let raw = localStorage.getItem('secp-today-' + currentEmployee.name);
+  if (!raw) return;
+  try {
+    let state = JSON.parse(raw);
+    if (state.date !== today) return; // New day
+    workState = state.workState || 'idle';
+    workStartTime = state.workStartTime ? new Date(state.workStartTime) : null;
+    breakStartTime = state.breakStartTime ? new Date(state.breakStartTime) : null;
+    totalBreakMs = state.totalBreakMs || 0;
+    todayEvents = state.todayEvents || [];
+  } catch(e) {}
+}
+
+// ── GOOGLE SYNC ───────────────────────────────────────────────
+async function syncToGoogle(event) {
+  try {
+    // Read current data, add event, write back
+    let resp = await fetch(SECP_GOOGLE_SCRIPT);
+    let raw = await resp.text();
+    let data = JSON.parse(raw);
+    if (!data.attendance) data.attendance = [];
+
+    data.attendance.push({
+      employee: currentEmployee ? currentEmployee.name : '?',
+      ...event,
+      date: new Date().toISOString().slice(0,10)
+    });
+
+    await fetch(SECP_GOOGLE_SCRIPT, { method: 'POST', body: JSON.stringify(data) });
+  } catch(e) {
+    console.log('Sync error (offline mode):', e);
+  }
+}
+
+// ── SCREENS ───────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+}
+
+// ── Camera QR Scanner ─────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let html5QrScanner = null;
+
+function openCamera() {
+  let overlay = document.getElementById('qr-reader-overlay');
+  overlay.style.display = 'flex';
+  overlay.style.flexDirection = 'column';
+
+  html5QrScanner = new Html5Qrcode("qr-reader");
+  html5QrScanner.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    },
+    (decodedText) => {
+      onQRFound(decodedText);
+      setTimeout(() => closeCam(), 300);
+    },
+    (errorMessage) => { /* scanning... */ }
+  ).catch(err => {
+    console.error('Camera error:', err);
+  });
+}
+
+function closeCam() {
+  if (html5QrScanner) {
+    html5QrScanner.stop().then(() => {
+      html5QrScanner.clear();
+      html5QrScanner = null;
+    }).catch(() => {});
+  }
+  let overlay = document.getElementById('qr-reader-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function onQRFound(url) {
+  try {
+    let u = new URL(url);
+    let action = u.searchParams.get('action');
+    let token = u.searchParams.get('token');
+    if (action && token) {
+      let last = sessionStorage.getItem('last-qr-token');
+      if (token !== last) {
+        sessionStorage.setItem('last-qr-token', token);
+        registerAction(action, true);
+      } else {
+        showEmpToast('Ten kod QR byl juz uzyty');
+      }
+    }
+  } catch(e) { showEmpToast('Nieprawidlowy kod QR'); }
+}
+
+function showEmpToast(msg) {
+  let t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1a56db;color:#fff;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;z-index:200;white-space:nowrap;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// Disable pull-to-refresh
+document.body.style.overscrollBehavior = 'none';
+document.documentElement.style.overscrollBehavior = 'none';
+</script>
+
+<div style="text-align:center;padding:16px;font-size:11px;color:var(--text3,#9ca3af);border-top:1px solid var(--border,#e5e7eb);margin-top:auto;">
+  Powered by <strong style="color:var(--accent,#1a56db)">SECP</strong> · KSM-Group · Autor: Michał Kucia
+</div>
+</body>
+</html>
