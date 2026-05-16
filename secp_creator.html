@@ -26,6 +26,8 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .inp:focus{border-color:var(--accent);}
 .btn-login{width:100%;background:var(--grad);color:#fff;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;margin-top:4px;}
 .login-err{font-size:12px;color:var(--red);margin-top:8px;display:none;}
+.pin-k{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:14px;font-size:18px;font-weight:700;color:var(--text);cursor:pointer;font-family:'Outfit',sans-serif;transition:all .15s;}
+.pin-k:hover{background:var(--border);} .pin-k:active{transform:scale(.92);}
 
 /* ── LAYOUT ── */
 #app{display:none;min-height:100vh;}
@@ -129,14 +131,49 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 
 <!-- LOGIN -->
 <div id="login-screen">
+  <div style="position:fixed;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(24,67,200,.12) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(14,165,233,.06) 0%,transparent 50%);pointer-events:none;"></div>
   <div class="login-box">
-    <div style="font-size:32px;margin-bottom:12px;">👑</div>
-    <div class="login-title">Panel Twórcy</div>
-    <div class="login-sub">SECP · KSM-Group · Tylko dla Michała</div>
-    <input class="inp" type="password" id="creator-pass" placeholder="Hasło twórcy"/>
-    <button class="btn-login" onclick="creatorLogin()">Wejdź →</button>
-    <div class="login-err" id="login-err">Błędne hasło</div>
+    <img src="https://ksm-group.github.io/lista-obecnosci/logo.png" alt="KSM-Group" style="height:80px;margin-bottom:20px;border-radius:50%;"/>
+    <div class="login-title">SECP</div>
+    <div class="login-sub" style="letter-spacing:.05em;text-transform:uppercase;font-size:11px;font-weight:600;">Administration Panel</div>
+
+    <!-- STEP 1: Password -->
+    <div id="step-pass" style="width:100%;margin-top:20px;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;text-align:left;">Hasło dostępu</div>
+      <input class="inp" type="password" id="creator-pass" placeholder="••••••••••••" onkeydown="if(event.key==='Enter')checkPass()"/>
+      <button class="btn-login" onclick="checkPass()">Dalej →</button>
+      <div class="login-err" id="login-err-pass">Nieprawidłowe hasło</div>
+    </div>
+
+    <!-- STEP 2: PIN -->
+    <div id="step-pin" style="width:100%;margin-top:20px;display:none;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px;text-align:center;">Weryfikacja PIN</div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-bottom:20px;" id="pin-dots-creator">
+        <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);" id="cpd0"></div>
+        <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);" id="cpd1"></div>
+        <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);" id="cpd2"></div>
+        <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);" id="cpd3"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:220px;margin:0 auto 12px;">
+        <button class="pin-k" onclick="cPin('1')">1</button>
+        <button class="pin-k" onclick="cPin('2')">2</button>
+        <button class="pin-k" onclick="cPin('3')">3</button>
+        <button class="pin-k" onclick="cPin('4')">4</button>
+        <button class="pin-k" onclick="cPin('5')">5</button>
+        <button class="pin-k" onclick="cPin('6')">6</button>
+        <button class="pin-k" onclick="cPin('7')">7</button>
+        <button class="pin-k" onclick="cPin('8')">8</button>
+        <button class="pin-k" onclick="cPin('9')">9</button>
+        <button class="pin-k" onclick="cPinClear()" style="font-size:11px;">CLR</button>
+        <button class="pin-k" onclick="cPin('0')">0</button>
+        <button class="pin-k" onclick="cPinBack()">⌫</button>
+      </div>
+      <div class="login-err" id="login-err-pin">Nieprawidłowy PIN</div>
+      <button class="btn-login" onclick="document.getElementById('step-pin').style.display='none';document.getElementById('step-pass').style.display='block';" style="background:transparent;color:var(--text3);box-shadow:none;margin-top:4px;font-size:12px;">← Wróć</button>
+    </div>
+
   </div>
+  <div style="position:fixed;bottom:20px;left:0;right:0;text-align:center;font-size:11px;color:var(--text3);">© 2026 SECP · KSM-Group · Michał Kucia</div>
 </div>
 
 <!-- APP -->
@@ -262,8 +299,12 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
           <div class="section-header"><span class="section-title">⚙️ Ustawienia systemu</span></div>
           <div style="padding:20px 18px;display:flex;flex-direction:column;gap:14px;">
             <div class="form-row">
-              <label>Hasło twórcy</label>
-              <input class="inp" type="password" id="s-creator-pass" placeholder="Nowe hasło twórcy"/>
+              <label>Hasło dostępu</label>
+              <input class="inp" type="password" id="s-creator-pass" placeholder="Nowe hasło (zostaw puste = bez zmian)"/>
+            </div>
+            <div class="form-row">
+              <label>PIN (4 cyfry)</label>
+              <input class="inp" type="text" id="s-creator-pin" placeholder="Nowy PIN (zostaw pusty = bez zmian)" maxlength="4"/>
             </div>
             <div class="form-row">
               <label>Base URL aplikacji</label>
@@ -412,6 +453,7 @@ const SETTINGS_KEY = 'secp-creator-settings';
 
 let settings = {
   creatorPass: 'KSM2026!',
+  creatorPin: '1234',
   baseUrl: 'https://ksm-group.github.io/lista-obecnosci/',
   masterScript: 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec'
 };
@@ -423,21 +465,52 @@ let clients = [];
 let activityLog = [];
 
 // ── LOGIN ─────────────────────────────────────────────────────
-function creatorLogin() {
+let creatorPinBuffer = '';
+
+function checkPass() {
   let pass = document.getElementById('creator-pass').value;
   let savedPass = localStorage.getItem(CREATOR_PASS_KEY) || settings.creatorPass;
-  if (pass !== savedPass) {
-    document.getElementById('login-err').style.display = 'block';
-    return;
-  }
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  loadData();
+  let err = document.getElementById('login-err-pass');
+  if (pass !== savedPass) { err.style.display = 'block'; return; }
+  err.style.display = 'none';
+  document.getElementById('step-pass').style.display = 'none';
+  document.getElementById('step-pin').style.display = 'block';
+  creatorPinBuffer = '';
+  updateCreatorPinDots();
 }
 
-document.getElementById('creator-pass').addEventListener('keydown', e => {
-  if (e.key === 'Enter') creatorLogin();
-});
+function cPin(k) {
+  if (creatorPinBuffer.length >= 4) return;
+  creatorPinBuffer += k;
+  updateCreatorPinDots();
+  if (creatorPinBuffer.length === 4) {
+    setTimeout(() => {
+      let savedPin = localStorage.getItem('secp-creator-pin') || settings.creatorPin || '1234';
+      if (creatorPinBuffer === savedPin) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        loadData();
+      } else {
+        document.getElementById('login-err-pin').style.display = 'block';
+        creatorPinBuffer = '';
+        updateCreatorPinDots();
+      }
+    }, 200);
+  }
+}
+
+function cPinBack() { creatorPinBuffer = creatorPinBuffer.slice(0,-1); updateCreatorPinDots(); }
+function cPinClear() { creatorPinBuffer = ''; updateCreatorPinDots(); }
+
+function updateCreatorPinDots() {
+  for (let i = 0; i < 4; i++) {
+    let dot = document.getElementById('cpd' + i);
+    if (dot) {
+      dot.style.background = i < creatorPinBuffer.length ? '#1843c8' : 'transparent';
+      dot.style.borderColor = i < creatorPinBuffer.length ? '#1843c8' : 'var(--border2)';
+    }
+  }
+}
 
 // ── DATA ──────────────────────────────────────────────────────
 function loadData() {
@@ -807,9 +880,11 @@ function clearActivity() {
 // ── SETTINGS ──────────────────────────────────────────────────
 function saveSettings() {
   let newPass = document.getElementById('s-creator-pass').value.trim();
-  if (newPass) {
-    settings.creatorPass = newPass;
-    localStorage.setItem(CREATOR_PASS_KEY, newPass);
+  if (newPass) { settings.creatorPass = newPass; localStorage.setItem(CREATOR_PASS_KEY, newPass); }
+  let newPin = document.getElementById('s-creator-pin').value.trim();
+  if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) {
+    settings.creatorPin = newPin;
+    localStorage.setItem('secp-creator-pin', newPin);
   }
   settings.baseUrl = document.getElementById('s-base-url').value.trim();
   settings.masterScript = document.getElementById('s-master-script').value.trim();
