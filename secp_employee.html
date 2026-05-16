@@ -989,16 +989,42 @@ function showScreen(name) {
 
 
 function openCamera() {
-  // Try Google Lens / native QR on Android Chrome
-  let ua = navigator.userAgent.toLowerCase();
-  if (/android/.test(ua) && /chrome/.test(ua)) {
-    // Google Lens intent for Chrome on Android
-    let appUrl = window.location.href;
-    window.location.href = 'intent://lens.google.com/search?ep=gsbubb&re=df&p=' + encodeURIComponent(appUrl) + '#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;end;';
-    setTimeout(() => startCamOverlay(), 1200);
-    return;
+  // Use native camera via file input - opens native camera with autofocus
+  let input = document.getElementById('qr-native-input');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.id = 'qr-native-input';
+    input.style.display = 'none';
+    input.addEventListener('change', function() {
+      if (!this.files || !this.files[0]) return;
+      let file = this.files[0];
+      let url = URL.createObjectURL(file);
+      let img = new Image();
+      img.onload = function() {
+        let canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        let imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url); // Free memory immediately
+        input.value = ''; // Reset so same photo can't be reused
+        if (typeof jsQR !== 'undefined') {
+          let code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+          if (code) {
+            onQRFound(code.data);
+          } else {
+            showEmpToast('Nie znaleziono QR — spróbuj ponownie');
+          }
+        }
+      };
+      img.src = url;
+    });
+    document.body.appendChild(input);
   }
-  startCamOverlay();
+  input.click();
 }
 
 function startCamOverlay() {
