@@ -401,7 +401,7 @@ body {
 .stat-label { font-size: 13px; color: var(--text2); }
 .stat-value { font-size: 14px; font-weight: 700; color: var(--text); }
 </style>
-<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
@@ -544,7 +544,15 @@ body {
 </div>
 
 
-<video id="qr-video" style="display:none;"></video>
+
+<div id="qr-reader-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:999;flex-direction:column;">
+  <div style="padding:14px 20px;display:flex;align-items:center;background:rgba(0,0,0,.9);">
+    <button onclick="closeCam()" style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:9px 16px;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;">✕ Zamknij</button>
+    <div style="flex:1;text-align:center;font-size:14px;font-weight:600;color:#fff;">Skieruj na kod QR</div>
+  </div>
+  <div id="qr-reader" style="flex:1;width:100%;"></div>
+</div>
+
 <canvas id="qr-canvas" style="display:none;"></canvas>
 
 <!-- DELEGATION MODAL -->
@@ -988,115 +996,49 @@ function showScreen(name) {
 
 
 
+
+
+
+
+
+
+
+
+
+let html5QrScanner = null;
+
 function openCamera() {
-  // Use native camera via file input - opens native camera with autofocus
-  let input = document.getElementById('qr-native-input');
-  if (!input) {
-    input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.id = 'qr-native-input';
-    input.style.display = 'none';
-    input.addEventListener('change', function() {
-      if (!this.files || !this.files[0]) return;
-      let file = this.files[0];
-      let url = URL.createObjectURL(file);
-      let img = new Image();
-      img.onload = function() {
-        let canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        canvas.getContext('2d').drawImage(img, 0, 0);
-        let imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(url); // Free memory immediately
-        input.value = ''; // Reset so same photo can't be reused
-        try {
-          let hints = new Map();
-          hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-          let reader = new ZXing.BrowserQRCodeReader();
-          let imgEl = document.createElement('img');
-          imgEl.src = url;
-          imgEl.onload = async function() {
-            try {
-              let result = await reader.decodeFromImageElement(imgEl);
-              onQRFound(result.getText());
-            } catch(e) {
-              showEmpToast('Nie znaleziono QR — spróbuj ponownie');
-            }
-          };
-        } catch(e) {
-          showEmpToast('Blad skanowania');
-        }
-      };
-      img.src = url;
-    });
-    document.body.appendChild(input);
-  }
-  input.click();
-}
+  let overlay = document.getElementById('qr-reader-overlay');
+  overlay.style.display = 'flex';
+  overlay.style.flexDirection = 'column';
 
-function startCamOverlay() {
-  // Open native camera via getUserMedia stream in fullscreen
-  let overlay = document.createElement('div');
-  overlay.id = 'cam-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:999;display:flex;flex-direction:column;';
-  overlay.innerHTML = 
-    '<div style="padding:14px 20px;display:flex;align-items:center;background:rgba(0,0,0,.9);">' +
-    '<button onclick="closeCam()" style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:9px 16px;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;">✕ Zamknij</button>' +
-    '<div style="flex:1;text-align:center;font-size:14px;font-weight:600;color:#fff;">Skieruj na kod QR</div></div>' +
-    '<div style="flex:1;position:relative;overflow:hidden;">' +
-    '<video id="cam-video" style="width:100%;height:100%;object-fit:cover;" playsinline autoplay muted></video>' +
-    '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">' +
-    '<div style="width:230px;height:230px;border:2px solid rgba(255,255,255,.8);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);"></div></div></div>' +
-    '<div style="padding:14px;text-align:center;background:rgba(0,0,0,.9);">' +
-    '<div id="cam-status" style="font-size:13px;color:rgba(255,255,255,.6);">Szukam kodu QR...</div></div>';
-  document.body.appendChild(overlay);
-
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } })
-    .then(stream => {
-      window._camStream = stream;
-      let video = document.getElementById('cam-video');
-      video.srcObject = stream;
-      video.play();
-      // Try autofocus
-      let track = stream.getVideoTracks()[0];
-      try {
-        let cap = track.getCapabilities ? track.getCapabilities() : {};
-        if (cap.focusMode && cap.focusMode.includes('continuous')) {
-          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
-        }
-      } catch(e) {}
-      // Scan loop
-      window._camInterval = setInterval(() => {
-        let v = document.getElementById('cam-video');
-        if (!v || !v.videoWidth) return;
-        let canvas = document.createElement('canvas');
-        canvas.width = v.videoWidth; canvas.height = v.videoHeight;
-        canvas.getContext('2d').drawImage(v, 0, 0);
-        let img = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-        if (typeof jsQR !== 'undefined') {
-          let code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-          if (code) {
-            clearInterval(window._camInterval);
-            document.getElementById('cam-status').textContent = '✓ Znaleziono!';
-            document.getElementById('cam-status').style.color = '#34d399';
-            setTimeout(() => { closeCam(); onQRFound(code.data); }, 400);
-          }
-        }
-      }, 250);
-    })
-    .catch(() => {
-      document.getElementById('cam-status').textContent = 'Brak dostępu do kamery — sprawdź uprawnienia';
-      document.getElementById('cam-status').style.color = '#f87171';
-    });
+  html5QrScanner = new Html5Qrcode("qr-reader");
+  html5QrScanner.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    },
+    (decodedText) => {
+      closeCam();
+      onQRFound(decodedText);
+    },
+    (errorMessage) => { /* scanning... */ }
+  ).catch(err => {
+    console.error('Camera error:', err);
+  });
 }
 
 function closeCam() {
-  if (window._camStream) { window._camStream.getTracks().forEach(t => t.stop()); window._camStream = null; }
-  if (window._camInterval) { clearInterval(window._camInterval); window._camInterval = null; }
-  let el = document.getElementById('cam-overlay');
-  if (el) el.remove();
+  if (html5QrScanner) {
+    html5QrScanner.stop().then(() => {
+      html5QrScanner.clear();
+      html5QrScanner = null;
+    }).catch(() => {});
+  }
+  let overlay = document.getElementById('qr-reader-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function onQRFound(url) {
