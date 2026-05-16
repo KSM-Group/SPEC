@@ -1001,37 +1001,43 @@ let cameraStream = null;
 let scanInterval = null;
 
 function openCamera() {
-  let screen = document.getElementById('qr-camera-screen');
-  screen.style.display = 'flex';
-  screen.style.flexDirection = 'column';
+  // On Android Chrome - try to open Google Lens / native QR
+  let ua = navigator.userAgent.toLowerCase();
+  if (/android/.test(ua)) {
+    // Try native QR scanner intent
+    window.location.href = 'intent://scan/#Intent;scheme=zxing;package=com.google.zxing.client.android;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.google.zxing.client.android;end';
+    // Fallback to camera after 1s if intent didn't open
+    setTimeout(() => {
+      document.getElementById('qr-camera-screen').style.display = 'flex';
+      document.getElementById('qr-camera-screen').style.flexDirection = 'column';
+      startLiveCamera();
+    }, 1000);
+  } else {
+    // iOS / desktop - show live camera
+    document.getElementById('qr-camera-screen').style.display = 'flex';
+    document.getElementById('qr-camera-screen').style.flexDirection = 'column';
+    startLiveCamera();
+  }
+}
 
+function startLiveCamera() {
   navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: { ideal: 'environment' },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 }
-    }
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
   }).then(stream => {
     cameraStream = stream;
     let video = document.getElementById('qr-video');
     video.srcObject = stream;
     video.play();
-
-    // Apply continuous autofocus after stream starts
     let track = stream.getVideoTracks()[0];
-    let capabilities = track.getCapabilities ? track.getCapabilities() : {};
-    let constraints = {};
-    if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
-      constraints.advanced = [{ focusMode: 'continuous' }];
+    if (track.getCapabilities) {
+      let cap = track.getCapabilities();
+      if (cap.focusMode && cap.focusMode.includes('continuous')) {
+        track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+      }
     }
-    if (capabilities.zoom) {
-      constraints.zoom = capabilities.zoom.min;
-    }
-    if (Object.keys(constraints).length) track.applyConstraints(constraints).catch(() => {});
-
     scanInterval = setInterval(scanFrame, 300);
-  }).catch(err => {
-    document.getElementById('qr-status').textContent = 'Brak dostępu do kamery';
+  }).catch(() => {
+    document.getElementById('qr-status').textContent = 'Brak dostępu do kamery — otwórz aparat telefonu ręcznie';
     document.getElementById('qr-status').style.color = '#f87171';
   });
 }
