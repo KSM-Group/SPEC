@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>SPEC — Panel QR</title>
@@ -802,5 +803,32 @@ function toggleFullscreen() {
 <div style="text-align:center;padding:16px;font-size:11px;color:var(--text3,#9ca3af);border-top:1px solid var(--border,#e5e7eb);margin-top:auto;">
   Powered by <strong style="color:var(--accent,#1a56db)">SPEC</strong> · KSM-Group · Autor: Michał Kucia
 </div>
+
+<style>
+body.dark{background:#0a0c10!important;color:#f1f5f9!important;}
+body.dark .sidebar{background:#0d0f14!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .main{background:#0a0c10!important;}
+body.dark .topbar{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .section{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .section-header{border-color:rgba(255,255,255,.07)!important;}
+body.dark .kpi{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .tbl th{background:#1a1e28!important;color:#475569!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .tbl td{border-color:rgba(255,255,255,.05)!important;color:#94a3b8!important;}
+body.dark .tbl tr:hover td{background:rgba(255,255,255,.02)!important;}
+body.dark .btn-outline{background:transparent!important;border-color:rgba(255,255,255,.13)!important;color:#94a3b8!important;}
+body.dark .inp{background:#1a1e28!important;border-color:rgba(255,255,255,.13)!important;color:#f1f5f9!important;}
+body.dark .modal{background:#111318!important;border-color:rgba(255,255,255,.13)!important;}
+body.dark .sb-item{color:#475569!important;}
+body.dark .sb-item:hover{background:#1a1e28!important;color:#f1f5f9!important;}
+body.dark .sb-item.active{background:rgba(24,67,200,.2)!important;color:#60a5fa!important;}
+</style>
+<script>
+function toggleDark(){
+  let d=document.body.classList.toggle('dark');
+  localStorage.setItem('spec-dark',d?'1':'0');
+}
+(function(){if(localStorage.getItem('spec-dark')==='1')document.body.classList.add('dark');})();
+</script>
+
 </body>
 </html>

@@ -542,6 +542,7 @@ body {
     <div class="nav-item active" onclick="showScreen('stats')"><span class="nav-icon">📊</span>Statystyki</div>
     <div class="nav-item" onclick="openCamera()"><span class="nav-icon">📷</span>Skanuj QR</div>
     <div class="nav-item" onclick="doLogout()"><span class="nav-icon">👤</span>Wyloguj</div>
+    <div class="nav-item" onclick="let d=document.body.classList.toggle('dark');localStorage.setItem('spec-dark',d?'1':'0')"><span class="nav-icon" style="font-size:16px;">🌙</span></div>
   </div>
 </div>
 
@@ -1079,5 +1080,20 @@ document.documentElement.style.overscrollBehavior = 'none';
 <div style="text-align:center;padding:16px;font-size:11px;color:var(--text3,#9ca3af);border-top:1px solid var(--border,#e5e7eb);margin-top:auto;">
   Powered by <strong style="color:var(--accent,#1a56db)">SPEC</strong> · KSM-Group · Autor: Michał Kucia
 </div>
+
+<style>
+body.dark{background:#0a0c10!important;color:#f1f5f9!important;}
+body.dark .screen{background:#0a0c10!important;}
+body.dark .card,.dark .action-btn,.dark .stat-card{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .nav-bar{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .nav-item{color:#475569!important;}
+body.dark .nav-item.active{color:#0ea5e9!important;}
+body.dark .header-bar{background:#111318!important;}
+body.dark .hist-item{border-color:rgba(255,255,255,.05)!important;}
+</style>
+<script>
+(function(){if(localStorage.getItem('spec-dark')==='1')document.body.classList.add('dark');})();
+</script>
+
 </body>
 </html>
