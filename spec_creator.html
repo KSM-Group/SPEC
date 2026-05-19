@@ -129,6 +129,22 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .rev-bar{flex:1;border-radius:4px 4px 0 0;background:var(--grad);opacity:.7;transition:opacity .2s;cursor:default;position:relative;}
 .rev-bar:hover{opacity:1;}
 .rev-bar-label{font-size:9px;color:var(--text3);text-align:center;margin-top:4px;}
+
+/* ── Dark toggle (unified) ── */
+.dark-toggle-wrap { display:flex; align-items:center; gap:5px; }
+.toggle-icon { font-size:12px; line-height:1; }
+.toggle-track {
+  width:38px; height:22px;
+  border:none; border-radius:22px; cursor:pointer;
+  position:relative; transition:background .25s; flex-shrink:0;
+  padding:0; background:#1e2538;
+}
+.toggle-track.active { background:#1843c8; }
+.toggle-knob {
+  position:absolute; width:16px; height:16px; background:#fff;
+  border-radius:50%; top:3px; left:3px;
+  transition:left .25s; display:block; box-shadow:0 1px 3px rgba(0,0,0,.4);
+}
 </style>
 </head>
 <body>
@@ -208,7 +224,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <div class="topbar-title" id="page-title">Dashboard</div>
       <div id="topbar-date" style="font-size:13px;color:var(--text3);"></div>
       <button class="btn-outline" onclick="loadData()">🔄 Odśwież</button>
-      <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--text3)">☀️</span><button onclick="toggleDark()" style="width:36px;height:20px;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;cursor:pointer;position:relative;"><span style="position:absolute;width:14px;height:14px;background:var(--text3);border-radius:50%;top:2px;left:2px;transition:all .3s;display:block;" id="dtoggle-knob"></span></button><span style="font-size:11px;color:var(--text3)">🌙</span></div>
+      <div class="dark-toggle-wrap">
+        <span class="toggle-icon">☀️</span>
+        <button id="dark-toggle-btn" class="toggle-track" onclick="toggleDark()" title="Jasny / Ciemny">
+          <span id="dark-knob" class="toggle-knob"></span>
+        </button>
+        <span class="toggle-icon">🌙</span>
+      </div>
       <button class="btn" onclick="openAddClient()">+ Nowy klient</button>
     </div>
 
@@ -1158,10 +1180,21 @@ body.dark .sb-item.active{background:rgba(24,67,200,.2)!important;color:#60a5fa!
 </style>
 <script>
 function toggleDark(){
-  let d=document.body.classList.toggle('dark');
-  localStorage.setItem('spec-dark',d?'1':'0');
+  let d = document.body.classList.toggle('dark');
+  localStorage.setItem('spec-dark', d ? '1' : '0');
+  updateToggleUI(d);
 }
-(function(){if(localStorage.getItem('spec-dark')==='1')document.body.classList.add('dark');})();
+function updateToggleUI(isDark) {
+  let btn = document.getElementById('dark-toggle-btn');
+  let knob = document.getElementById('dark-knob');
+  if (btn) btn.classList.toggle('active', isDark);
+  if (knob) knob.style.left = isDark ? '18px' : '3px';
+}
+(function(){
+  let isDark = localStorage.getItem('spec-dark') === '1';
+  if (isDark) document.body.classList.add('dark');
+  setTimeout(() => updateToggleUI(isDark), 0);
+})();
 </script>
 
 </body>
