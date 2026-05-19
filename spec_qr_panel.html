@@ -525,7 +525,7 @@ body::before {
     </div>
     <div class="form-row">
       <label>URL aplikacji pracownika</label>
-      <input type="text" id="s-empurl" placeholder="https://ksm-group.github.io/secp-app/secp_employee.html"/>
+      <input type="text" id="s-empurl" placeholder="https://ksm-group.github.io/secp-app/spec_employee.html"/>
     </div>
     <div class="form-row">
       <label>Zmień PIN admina</label>
@@ -547,7 +547,7 @@ let cfg = {
   secret: 'SPEC-2026',
   interval: 15,   // minutes per code
   cycle: 20,      // codes in loop
-  empUrl: window.location.origin + window.location.pathname.replace('secp_qr_panel.html','') + 'secp_employee.html'
+  empUrl: window.location.origin + window.location.pathname.replace('spec_qr_panel.html','') + 'spec_employee.html'
 };
 
 const ACTIONS = ['entry','exit','break-start','break-end'];
