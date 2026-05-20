@@ -7,26 +7,26 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
-  --bg: #0a0c10; --surface: #111318; --surface2: #1a1e28;
-  --border: #1e2538; --border2: #253550;
+  --bg: #f0f4ff; --surface: #fff; --surface2: #f4f6fa;
+  --border: #e2e8f0; --border2: #cbd5e1;
   --accent: #1843c8; --accent2: #0ea5e9; --gold: #c9a84c;
   --green: #10b981; --red: #ef4444; --amber: #f59e0b;
-  --text: #f1f5f9; --text2: #94a3b8; --text3: #475569;
+  --text: #0e1117; --text2: #4b5563; --text3: #9ca3af;
   --grad: linear-gradient(135deg, #1843c8, #0ea5e9);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 
 /* ── LOGIN ── */
-#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 30% 50%,rgba(24,67,200,.15) 0%,transparent 60%);}
-.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 36px;width:360px;text-align:center;}
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e8edf8,#f0f4ff,#e4ecf8);}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 36px;width:360px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.08);}
 .login-title{font-family:'Playfair Display',serif;font-size:28px;font-weight:800;margin-bottom:6px;letter-spacing:-.02em;}
 .login-sub{font-size:13px;color:var(--text2);margin-bottom:28px;}
 .inp{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:11px 14px;font-size:14px;color:var(--text);font-family:'Outfit',sans-serif;outline:none;margin-bottom:10px;transition:border-color .2s;}
 .inp:focus{border-color:var(--accent);}
 .btn-login{width:100%;background:var(--grad);color:#fff;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;margin-top:4px;}
 .login-err{font-size:12px;color:var(--red);margin-top:8px;display:none;}
-.pin-k{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:14px;font-size:18px;font-weight:700;color:var(--text);cursor:pointer;font-family:'Outfit',sans-serif;transition:all .15s;}
+.pin-k{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:14px;font-size:18px;font-weight:700;color:var(--text);cursor:pointer;font-family:'Outfit',sans-serif;transition:all .15s;}
 .pin-k:hover{background:var(--border);} .pin-k:active{transform:scale(.92);}
 
 /* ── LAYOUT ── */
@@ -129,29 +129,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .rev-bar{flex:1;border-radius:4px 4px 0 0;background:var(--grad);opacity:.7;transition:opacity .2s;cursor:default;position:relative;}
 .rev-bar:hover{opacity:1;}
 .rev-bar-label{font-size:9px;color:var(--text3);text-align:center;margin-top:4px;}
-
-/* ── Dark toggle (unified) ── */
-.dark-toggle-wrap { display:flex; align-items:center; gap:5px; }
-.toggle-icon { font-size:12px; line-height:1; }
-.toggle-track {
-  width:38px; height:22px;
-  border:none; border-radius:22px; cursor:pointer;
-  position:relative; transition:background .25s; flex-shrink:0;
-  padding:0; background:#1e2538;
-}
-.toggle-track.active { background:#1843c8; }
-.toggle-knob {
-  position:absolute; width:16px; height:16px; background:#fff;
-  border-radius:50%; top:3px; left:3px;
-  transition:left .25s; display:block; box-shadow:0 1px 3px rgba(0,0,0,.4);
-}
 </style>
 </head>
 <body>
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <div style="position:fixed;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(24,67,200,.12) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(14,165,233,.06) 0%,transparent 50%);pointer-events:none;"></div>
+  <div style="position:fixed;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(24,67,200,.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(14,165,233,.04) 0%,transparent 50%);pointer-events:none;"></div>
   <div class="login-box">
     <img src="https://ksm-group.github.io/lista-obecnosci/logo.png" alt="KSM-Group" style="height:80px;margin-bottom:20px;border-radius:50%;"/>
     <div class="login-title">SPEC</div>
@@ -226,7 +210,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <button class="btn-outline" onclick="loadData()">🔄 Odśwież</button>
       <div class="dark-toggle-wrap">
         <span class="toggle-icon">☀️</span>
-        <button id="dark-toggle-btn" class="toggle-track" onclick="toggleDark()" title="Jasny / Ciemny">
+        <button id="dark-btn" class="toggle-track" onclick="toggleDark()" title="Jasny / Ciemny">
           <span id="dark-knob" class="toggle-knob"></span>
         </button>
         <span class="toggle-icon">🌙</span>
@@ -1161,39 +1145,90 @@ function showToast(msg) {
 </script>
 
 <style>
-body.dark{background:#0a0c10!important;color:#f1f5f9!important;}
-body.dark .sidebar{background:#0d0f14!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .main{background:#0a0c10!important;}
-body.dark .topbar{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .section{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .section-header{border-color:rgba(255,255,255,.07)!important;}
-body.dark .kpi{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .tbl th{background:#1a1e28!important;color:#475569!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .tbl td{border-color:rgba(255,255,255,.05)!important;color:#94a3b8!important;}
-body.dark .tbl tr:hover td{background:rgba(255,255,255,.02)!important;}
-body.dark .btn-outline{background:transparent!important;border-color:rgba(255,255,255,.13)!important;color:#94a3b8!important;}
-body.dark .inp{background:#1a1e28!important;border-color:rgba(255,255,255,.13)!important;color:#f1f5f9!important;}
-body.dark .modal{background:#111318!important;border-color:rgba(255,255,255,.13)!important;}
-body.dark .sb-item{color:#475569!important;}
-body.dark .sb-item:hover{background:#1a1e28!important;color:#f1f5f9!important;}
+/* ── Dark toggle ── */
+.dark-toggle-wrap{display:flex;align-items:center;gap:5px;}
+.toggle-icon{font-size:12px;}
+.toggle-track{width:40px;height:22px;border:none;border-radius:22px;cursor:pointer;position:relative;transition:background .25s;flex-shrink:0;padding:0;background:#cbd5e1;}
+.toggle-track.on{background:#1843c8;}
+.toggle-knob{position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:3px;left:3px;transition:left .25s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+
+/* ── Dark mode — kompletny ── */
+body.dark{
+  background:#111827!important;color:#f1f5f9!important;
+}
+body.dark #login-screen{background:linear-gradient(145deg,#0a1220,#111827,#0d1e30)!important;}
+body.dark .login-box{background:#1e2637!important;border-color:rgba(255,255,255,.08)!important;}
+body.dark .login-title{color:#f1f5f9!important;}
+body.dark .login-sub{color:#64748b!important;}
+body.dark .inp{background:#263147!important;border-color:rgba(255,255,255,.12)!important;color:#f1f5f9!important;}
+body.dark .inp:focus{border-color:#1843c8!important;}
+body.dark .pin-k{background:#263147!important;border-color:rgba(255,255,255,.1)!important;color:#f1f5f9!important;}
+body.dark .pin-k:hover{background:#2d3a55!important;}
+body.dark .sidebar{background:#161d2e!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .sb-logo{border-color:rgba(255,255,255,.07)!important;}
+body.dark .sb-logo-text{color:#f1f5f9!important;}
+body.dark .sb-item{color:#64748b!important;}
+body.dark .sb-item:hover{background:#1e2a3e!important;color:#e2e8f0!important;}
 body.dark .sb-item.active{background:rgba(24,67,200,.2)!important;color:#60a5fa!important;}
+body.dark .sb-user{color:#475569!important;}
+body.dark .sb-footer{border-color:rgba(255,255,255,.07)!important;}
+body.dark .main{background:#111827!important;}
+body.dark .topbar{background:#1e2637!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .topbar-title{color:#f1f5f9!important;}
+body.dark .btn-outline{background:rgba(255,255,255,.04)!important;border-color:rgba(255,255,255,.12)!important;color:#94a3b8!important;}
+body.dark .btn-outline:hover{border-color:#4d8ef0!important;color:#4d8ef0!important;}
+body.dark .section{background:#1e2637!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .section-header{border-color:rgba(255,255,255,.07)!important;background:#1e2637!important;}
+body.dark .section-title{color:#94a3b8!important;}
+body.dark .kpi{background:#1e2637!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .kpi-label{color:#64748b!important;}
+body.dark .kpi-value{color:#f1f5f9!important;}
+body.dark .kpi-sub{color:#475569!important;}
+body.dark .tbl th{background:#263147!important;color:#64748b!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .tbl td{border-color:rgba(255,255,255,.05)!important;color:#94a3b8!important;}
+body.dark .tbl tr:last-child td{border-bottom:none!important;}
+body.dark .tbl tr:hover td{background:#263147!important;}
+body.dark .tbl .client-row td:first-child{color:#f1f5f9!important;}
+body.dark .badge.active{background:rgba(16,185,129,.15)!important;color:#34d399!important;}
+body.dark .badge.inactive{background:rgba(100,116,139,.15)!important;color:#64748b!important;}
+body.dark .badge.trial{background:rgba(245,158,11,.15)!important;color:#fbbf24!important;}
+body.dark .badge.starter{background:rgba(96,165,250,.15)!important;color:#60a5fa!important;}
+body.dark .badge.business{background:rgba(139,92,246,.15)!important;color:#a78bfa!important;}
+body.dark .badge.enterprise{background:rgba(201,168,76,.15)!important;color:#c9a84c!important;}
+body.dark .modal-overlay{background:rgba(0,0,0,.7)!important;}
+body.dark .modal{background:#1e2637!important;border-color:rgba(255,255,255,.1)!important;}
+body.dark .modal h2{color:#f1f5f9!important;}
+body.dark .form-row label{color:#94a3b8!important;}
+body.dark .copy-btn{background:#263147!important;border-color:rgba(255,255,255,.1)!important;color:#94a3b8!important;}
+body.dark .copy-btn:hover{border-color:#4d8ef0!important;color:#4d8ef0!important;}
+body.dark .link-cell{color:#475569!important;}
+body.dark .activity-item{border-color:rgba(255,255,255,.05)!important;}
+body.dark .activity-text{color:#94a3b8!important;}
+body.dark .activity-text strong{color:#e2e8f0!important;}
+body.dark .activity-time{color:#475569!important;}
+body.dark .rev-bar{opacity:.85!important;}
+body.dark .rev-bar-label{color:#475569!important;}
+body.dark .toast{background:#2d3a55!important;border:1px solid rgba(255,255,255,.1)!important;}
+body.dark .wiz-step{color:#475569!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .wiz-step.active{color:#0ea5e9!important;border-bottom-color:#0ea5e9!important;}
+body.dark .wiz-step.done{color:#34d399!important;border-bottom-color:#34d399!important;}
 </style>
 <script>
 function toggleDark(){
-  let d = document.body.classList.toggle('dark');
-  localStorage.setItem('spec-dark', d ? '1' : '0');
-  updateToggleUI(d);
+  let d=document.body.classList.toggle('dark');
+  localStorage.setItem('spec-dark',d?'1':'0');
+  updateDarkUI(d);
 }
-function updateToggleUI(isDark) {
-  let btn = document.getElementById('dark-toggle-btn');
-  let knob = document.getElementById('dark-knob');
-  if (btn) btn.classList.toggle('active', isDark);
-  if (knob) knob.style.left = isDark ? '18px' : '3px';
+function updateDarkUI(d){
+  let btn=document.getElementById('dark-btn');
+  let knob=document.getElementById('dark-knob');
+  if(btn) btn.classList.toggle('on',d);
+  if(knob) knob.style.left=d?'21px':'3px';
 }
 (function(){
-  let isDark = localStorage.getItem('spec-dark') === '1';
-  if (isDark) document.body.classList.add('dark');
-  setTimeout(() => updateToggleUI(isDark), 0);
+  let d=localStorage.getItem('spec-dark')==='1';
+  if(d) document.body.classList.add('dark');
+  setTimeout(()=>updateDarkUI(d),0);
 })();
 </script>
 
