@@ -529,6 +529,13 @@ body::before {
       <input type="text" id="s-empurl" placeholder="https://ksm-group.github.io/SPEC/spec_employee.html"/>
     </div>
     <div class="form-row">
+      <label>Ewidencja przerw</label>
+      <select id="s-breaks" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;outline:none;">
+        <option value="1">Włączona — pokazuj kody przerw</option>
+        <option value="0">Wyłączona — ukryj kody przerw</option>
+      </select>
+    </div>
+    <div class="form-row">
       <label>Zmień PIN admina</label>
       <input type="text" id="s-pin" placeholder="4 cyfry" maxlength="4" value=""/>
     </div>
@@ -546,8 +553,9 @@ body::before {
 let cfg = {
   name: 'Moja Firma',
   secret: 'SPEC-2026',
-  interval: 15,   // minutes per code
-  cycle: 20,      // codes in loop
+  interval: 15,
+  cycle: 20,
+  showBreaks: true,
   empUrl: window.location.origin + window.location.pathname.replace('spec_qr_panel.html','') + 'spec_employee.html'
 };
 
@@ -560,6 +568,14 @@ let secondsLeft = 0;
 let totalSeconds = 0;
 
 // ── INIT ──────────────────────────────────────────────────────
+function applyBreakVisibility() {
+  let show = cfg.showBreaks !== false;
+  let bsCard = document.getElementById('card-break-start');
+  let beCard = document.getElementById('card-break-end');
+  if (bsCard) bsCard.style.display = show ? '' : 'none';
+  if (beCard) beCard.style.display = show ? '' : 'none';
+}
+
 window.onload = function() {
   loadSettings();
   buildCycleDots();
@@ -593,6 +609,7 @@ function initQRs() {
   generateAllQRs();
   updateCycleDots();
   updateProgressBars();
+  applyBreakVisibility();
 }
 
 function generateAllQRs() {
@@ -717,17 +734,21 @@ function loadSettings() {
   document.getElementById('s-interval').value = cfg.interval;
   document.getElementById('s-cycle').value    = cfg.cycle;
   document.getElementById('s-empurl').value   = cfg.empUrl;
+  document.getElementById('s-breaks').value   = cfg.showBreaks ? '1' : '0';
+  applyBreakVisibility();
 }
 
 function saveSettings() {
-  cfg.name     = document.getElementById('s-name').value;
-  cfg.secret   = document.getElementById('s-secret').value;
-  cfg.interval = parseInt(document.getElementById('s-interval').value);
-  cfg.cycle    = parseInt(document.getElementById('s-cycle').value);
-  cfg.empUrl   = document.getElementById('s-empurl').value;
+  cfg.name       = document.getElementById('s-name').value;
+  cfg.secret     = document.getElementById('s-secret').value;
+  cfg.interval   = parseInt(document.getElementById('s-interval').value);
+  cfg.cycle      = parseInt(document.getElementById('s-cycle').value);
+  cfg.empUrl     = document.getElementById('s-empurl').value;
+  cfg.showBreaks = document.getElementById('s-breaks').value === '1';
   let newPin = document.getElementById('s-pin').value;
   if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) { adminPin = newPin; localStorage.setItem('secp-admin-pin', newPin); }
   localStorage.setItem('secp-qr-panel-cfg', JSON.stringify(cfg));
+  applyBreakVisibility();
   closeSettings();
   buildCycleDots();
   initQRs();

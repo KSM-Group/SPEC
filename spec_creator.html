@@ -537,6 +537,10 @@ async function sbCreateClient(client, logins) {
   });
 }
 
+const PLAN_PRICE = { trial: 0, starter: 499, business: 749, enterprise: 999 };
+const PLAN_MAXEMP = { trial: 5, starter: 20, business: 100, enterprise: 99999 };
+const PLAN_LOGINS = { trial: 1, starter: 1, business: 2, enterprise: 4 };
+
 function wizNext(step) {
   // Validate current step
   if (step === 2) {
@@ -626,9 +630,6 @@ let settings = {
   masterScript: 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec'
 };
 
-const PLAN_PRICE = { trial: 0, starter: 499, business: 749, enterprise: 999 };
-const PLAN_MAXEMP = { trial: 5, starter: 20, business: 100, enterprise: 99999 };
-const PLAN_LOGINS = { trial: 1, starter: 1, business: 2, enterprise: 4 };
 
 let clients = [];
 let activityLog = [];
