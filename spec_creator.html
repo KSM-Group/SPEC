@@ -7,26 +7,26 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
-  --bg: #f0f4ff; --surface: #fff; --surface2: #f4f6fa;
-  --border: #e2e8f0; --border2: #cbd5e1;
+  --bg: #0a0c10; --surface: #111318; --surface2: #1a1e28;
+  --border: #1e2538; --border2: #253550;
   --accent: #1843c8; --accent2: #0ea5e9; --gold: #c9a84c;
   --green: #10b981; --red: #ef4444; --amber: #f59e0b;
-  --text: #0e1117; --text2: #4b5563; --text3: #9ca3af;
+  --text: #f1f5f9; --text2: #94a3b8; --text3: #475569;
   --grad: linear-gradient(135deg, #1843c8, #0ea5e9);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 
 /* ── LOGIN ── */
-#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e8edf8,#f0f4ff,#e4ecf8);}
-.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 36px;width:360px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.08);}
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 30% 50%,rgba(24,67,200,.15) 0%,transparent 60%);}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 36px;width:360px;text-align:center;}
 .login-title{font-family:'Playfair Display',serif;font-size:28px;font-weight:800;margin-bottom:6px;letter-spacing:-.02em;}
 .login-sub{font-size:13px;color:var(--text2);margin-bottom:28px;}
 .inp{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:11px 14px;font-size:14px;color:var(--text);font-family:'Outfit',sans-serif;outline:none;margin-bottom:10px;transition:border-color .2s;}
 .inp:focus{border-color:var(--accent);}
 .btn-login{width:100%;background:var(--grad);color:#fff;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;margin-top:4px;}
 .login-err{font-size:12px;color:var(--red);margin-top:8px;display:none;}
-.pin-k{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:14px;font-size:18px;font-weight:700;color:var(--text);cursor:pointer;font-family:'Outfit',sans-serif;transition:all .15s;}
+.pin-k{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:14px;font-size:18px;font-weight:700;color:var(--text);cursor:pointer;font-family:'Outfit',sans-serif;transition:all .15s;}
 .pin-k:hover{background:var(--border);} .pin-k:active{transform:scale(.92);}
 
 /* ── LAYOUT ── */
@@ -135,7 +135,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <div style="position:fixed;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(24,67,200,.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(14,165,233,.04) 0%,transparent 50%);pointer-events:none;"></div>
+  <div style="position:fixed;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(24,67,200,.12) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(14,165,233,.06) 0%,transparent 50%);pointer-events:none;"></div>
   <div class="login-box">
     <img src="https://ksm-group.github.io/lista-obecnosci/logo.png" alt="KSM-Group" style="height:80px;margin-bottom:20px;border-radius:50%;"/>
     <div class="login-title">SPEC</div>
@@ -208,13 +208,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <div class="topbar-title" id="page-title">Dashboard</div>
       <div id="topbar-date" style="font-size:13px;color:var(--text3);"></div>
       <button class="btn-outline" onclick="loadData()">🔄 Odśwież</button>
-      <div class="dark-toggle-wrap">
-        <span class="toggle-icon">☀️</span>
-        <button id="dark-btn" class="toggle-track" onclick="toggleDark()" title="Jasny / Ciemny">
-          <span id="dark-knob" class="toggle-knob"></span>
-        </button>
-        <span class="toggle-icon">🌙</span>
-      </div>
+      <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--text3)">☀️</span><button onclick="toggleDark()" style="width:36px;height:20px;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;cursor:pointer;position:relative;"><span style="position:absolute;width:14px;height:14px;background:var(--text3);border-radius:50%;top:2px;left:2px;transition:all .3s;display:block;" id="dtoggle-knob"></span></button><span style="font-size:11px;color:var(--text3)">🌙</span></div>
       <button class="btn" onclick="openAddClient()">+ Nowy klient</button>
     </div>
 
@@ -342,7 +336,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
     <div style="display:flex;gap:0;margin-bottom:24px;">
       <div class="wiz-step active" id="wiz-s1">1 Dane firmy</div>
       <div class="wiz-step" id="wiz-s2">2 Konfiguracja</div>
-      <div class="wiz-step" id="wiz-s3">3 Sheet &amp; Script</div>
+      <div class="wiz-step" id="wiz-s3">3 Baza danych</div>
       <div class="wiz-step" id="wiz-s4">4 Loginy</div>
     </div>
 
@@ -383,39 +377,17 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 
     <!-- STEP 3: Google Sheet setup -->
     <div id="wiz-step-3" style="display:none;">
-      <h2 style="margin-bottom:16px;">☁️ Google Sheet — konfiguracja</h2>
+      <h2 style="margin-bottom:16px;">☁️ Baza danych</h2>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">Instrukcja krok po kroku:</div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">Skopiuj szablon arkusza</div>
-              <a id="sheet-copy-link" href="#" target="_blank" style="font-size:11px;color:var(--accent2);text-decoration:none;background:rgba(14,165,233,.1);padding:4px 10px;border-radius:4px;">📋 Otwórz i skopiuj szablon →</a>
-            </div>
-          </div>
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
-            <div style="font-size:12px;color:var(--text2);">W skopiowanym arkuszu: <strong style="color:var(--text);">Rozszerzenia → Apps Script</strong></div>
-          </div>
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</div>
-            <div>
-              <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Zastąp cały kod tym skryptem:</div>
-              <div style="background:#0a0c10;border-radius:6px;padding:10px;font-family:monospace;font-size:10px;color:#a5f3fc;overflow-x:auto;" id="apps-script-code"></div>
-              <button onclick="copyScriptCode()" style="margin-top:6px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.2);color:var(--accent2);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;">📋 Kopiuj kod</button>
-            </div>
-          </div>
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">4</div>
-            <div style="font-size:12px;color:var(--text2);"><strong style="color:var(--text);">Wdróż → Nowe wdrożenie → Aplikacja internetowa → Wszyscy</strong> → skopiuj URL</div>
-          </div>
+        <div style="display:flex;align-items:center;gap:12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:16px;">
+        <div style="font-size:28px;">✅</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:4px;">Supabase — bez konfiguracji!</div>
+          <div style="font-size:12px;color:var(--text2);">Dane klienta zostaną automatycznie utworzone w bazie danych przy kliknięciu "Utwórz klienta". Nie musisz nic konfigurować.</div>
         </div>
       </div>
-      <div class="form-row">
-        <label>Wklej URL wdrożenia Apps Script *</label>
-        <input class="inp" type="text" id="c-script" placeholder="https://script.google.com/macros/s/..."/>
       </div>
+<input type="hidden" id="c-script" value="supabase"/>
       <div class="modal-btns"><button class="btn-outline" onclick="wizNext(2)">← Wróć</button><button class="btn" onclick="wizNext(4)">Dalej →</button></div>
     </div>
 
@@ -532,6 +504,39 @@ function getSheet() {
 
 const SHEET_TEMPLATE_ID = '1gx0nLowIscnId456_gjS4ecWcC32vJ_p57agWnmJqVI';
 
+// ── SUPABASE ──────────────────────────────────────────────────
+const SB_URL = 'https://rccxsogpkqiunyooqaeg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
+const SB_HDR = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+
+async function sbCreateClient(client, logins) {
+  // 1. Dodaj klienta
+  await fetch(SB_URL+'/rest/v1/clients', {
+    method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
+    body: JSON.stringify({id: client.id, name: client.name})
+  });
+  // 2. Dodaj loginy
+  for (let l of logins) {
+    if (!l.email) continue;
+    await fetch(SB_URL+'/rest/v1/client_logins', {
+      method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
+      body: JSON.stringify({client_id: client.id, email: l.email, password_hash: l.pass})
+    });
+  }
+  // 3. Inicjuj dane klienta
+  await fetch(SB_URL+'/rest/v1/client_data', {
+    method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
+    body: JSON.stringify({
+      client_id: client.id,
+      data: {
+        employees: [{name:'Jan Kowalski',group:'g1'}],
+        groups: [{id:'g1',name:'I ZMIANA'}],
+        monthStatuses: {}, extraData: {}, attendance: [], delegations: []
+      }
+    })
+  });
+}
+
 function wizNext(step) {
   // Validate current step
   if (step === 2) {
@@ -547,7 +552,6 @@ function wizNext(step) {
     document.getElementById('apps-script-code').textContent = APPS_SCRIPT_TEMPLATE;
   }
   if (step === 4) {
-    if (!document.getElementById('c-script').value.trim()) { showToast('⚠️ Wklej URL Apps Script'); return; }
     buildLoginsForms();
     let clientId = document.getElementById('c-id').value.trim();
     document.getElementById('preview-link').textContent = settings.baseUrl + '?client=' + clientId;
@@ -890,7 +894,7 @@ function generateQRKey() {
   return 'SPEC-' + Math.random().toString(36).substring(2,8).toUpperCase();
 }
 
-function addClient() {
+async function addClient() {
   let name  = document.getElementById('c-name').value.trim();
   let id    = document.getElementById('c-id').value.trim();
   let email = document.getElementById('c-email').value.trim();
@@ -922,13 +926,24 @@ function addClient() {
     setupFee: 500
   };
 
+  // Zapisz do Supabase
+  let btn = document.querySelector('#wiz-step-4 .btn:last-child');
+  if (btn) { btn.textContent = 'Tworzenie...'; btn.disabled = true; }
+  try {
+    await sbCreateClient(client, logins);
+  } catch(e) {
+    showToast('⚠️ Błąd Supabase: ' + e.message);
+    if (btn) { btn.textContent = '✓ Utwórz klienta'; btn.disabled = false; }
+    return;
+  }
+  if (btn) { btn.textContent = '✓ Utwórz klienta'; btn.disabled = false; }
+
   clients.push(client);
   saveClients();
   logActivity('add', '➕ Dodano klienta <strong>' + name + '</strong> (plan: ' + plan + ', ' + loginCount + ' loginy)');
   closeModal('modal-add');
   renderAll();
-  showToast('✓ Klient ' + name + ' dodany!');
-  // Auto show email with access data
+  showToast('✓ Klient ' + name + ' dodany w Supabase!');
   setTimeout(() => showEmailModal(clients.length - 1), 500);
 }
 
@@ -1145,91 +1160,29 @@ function showToast(msg) {
 </script>
 
 <style>
-/* ── Dark toggle ── */
-.dark-toggle-wrap{display:flex;align-items:center;gap:5px;}
-.toggle-icon{font-size:12px;}
-.toggle-track{width:40px;height:22px;border:none;border-radius:22px;cursor:pointer;position:relative;transition:background .25s;flex-shrink:0;padding:0;background:#cbd5e1;}
-.toggle-track.on{background:#1843c8;}
-.toggle-knob{position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:3px;left:3px;transition:left .25s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
-
-/* ── Dark mode — kompletny ── */
-body.dark{
-  background:#111827!important;color:#f1f5f9!important;
-}
-body.dark #login-screen{background:linear-gradient(145deg,#0a1220,#111827,#0d1e30)!important;}
-body.dark .login-box{background:#1e2637!important;border-color:rgba(255,255,255,.08)!important;}
-body.dark .login-title{color:#f1f5f9!important;}
-body.dark .login-sub{color:#64748b!important;}
-body.dark .inp{background:#263147!important;border-color:rgba(255,255,255,.12)!important;color:#f1f5f9!important;}
-body.dark .inp:focus{border-color:#1843c8!important;}
-body.dark .pin-k{background:#263147!important;border-color:rgba(255,255,255,.1)!important;color:#f1f5f9!important;}
-body.dark .pin-k:hover{background:#2d3a55!important;}
-body.dark .sidebar{background:#161d2e!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .sb-logo{border-color:rgba(255,255,255,.07)!important;}
-body.dark .sb-logo-text{color:#f1f5f9!important;}
-body.dark .sb-item{color:#64748b!important;}
-body.dark .sb-item:hover{background:#1e2a3e!important;color:#e2e8f0!important;}
-body.dark .sb-item.active{background:rgba(24,67,200,.2)!important;color:#60a5fa!important;}
-body.dark .sb-user{color:#475569!important;}
-body.dark .sb-footer{border-color:rgba(255,255,255,.07)!important;}
-body.dark .main{background:#111827!important;}
-body.dark .topbar{background:#1e2637!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .topbar-title{color:#f1f5f9!important;}
-body.dark .btn-outline{background:rgba(255,255,255,.04)!important;border-color:rgba(255,255,255,.12)!important;color:#94a3b8!important;}
-body.dark .btn-outline:hover{border-color:#4d8ef0!important;color:#4d8ef0!important;}
-body.dark .section{background:#1e2637!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .section-header{border-color:rgba(255,255,255,.07)!important;background:#1e2637!important;}
-body.dark .section-title{color:#94a3b8!important;}
-body.dark .kpi{background:#1e2637!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .kpi-label{color:#64748b!important;}
-body.dark .kpi-value{color:#f1f5f9!important;}
-body.dark .kpi-sub{color:#475569!important;}
-body.dark .tbl th{background:#263147!important;color:#64748b!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark{background:#0a0c10!important;color:#f1f5f9!important;}
+body.dark .sidebar{background:#0d0f14!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .main{background:#0a0c10!important;}
+body.dark .topbar{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .section{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .section-header{border-color:rgba(255,255,255,.07)!important;}
+body.dark .kpi{background:#111318!important;border-color:rgba(255,255,255,.07)!important;}
+body.dark .tbl th{background:#1a1e28!important;color:#475569!important;border-color:rgba(255,255,255,.07)!important;}
 body.dark .tbl td{border-color:rgba(255,255,255,.05)!important;color:#94a3b8!important;}
-body.dark .tbl tr:last-child td{border-bottom:none!important;}
-body.dark .tbl tr:hover td{background:#263147!important;}
-body.dark .tbl .client-row td:first-child{color:#f1f5f9!important;}
-body.dark .badge.active{background:rgba(16,185,129,.15)!important;color:#34d399!important;}
-body.dark .badge.inactive{background:rgba(100,116,139,.15)!important;color:#64748b!important;}
-body.dark .badge.trial{background:rgba(245,158,11,.15)!important;color:#fbbf24!important;}
-body.dark .badge.starter{background:rgba(96,165,250,.15)!important;color:#60a5fa!important;}
-body.dark .badge.business{background:rgba(139,92,246,.15)!important;color:#a78bfa!important;}
-body.dark .badge.enterprise{background:rgba(201,168,76,.15)!important;color:#c9a84c!important;}
-body.dark .modal-overlay{background:rgba(0,0,0,.7)!important;}
-body.dark .modal{background:#1e2637!important;border-color:rgba(255,255,255,.1)!important;}
-body.dark .modal h2{color:#f1f5f9!important;}
-body.dark .form-row label{color:#94a3b8!important;}
-body.dark .copy-btn{background:#263147!important;border-color:rgba(255,255,255,.1)!important;color:#94a3b8!important;}
-body.dark .copy-btn:hover{border-color:#4d8ef0!important;color:#4d8ef0!important;}
-body.dark .link-cell{color:#475569!important;}
-body.dark .activity-item{border-color:rgba(255,255,255,.05)!important;}
-body.dark .activity-text{color:#94a3b8!important;}
-body.dark .activity-text strong{color:#e2e8f0!important;}
-body.dark .activity-time{color:#475569!important;}
-body.dark .rev-bar{opacity:.85!important;}
-body.dark .rev-bar-label{color:#475569!important;}
-body.dark .toast{background:#2d3a55!important;border:1px solid rgba(255,255,255,.1)!important;}
-body.dark .wiz-step{color:#475569!important;border-color:rgba(255,255,255,.07)!important;}
-body.dark .wiz-step.active{color:#0ea5e9!important;border-bottom-color:#0ea5e9!important;}
-body.dark .wiz-step.done{color:#34d399!important;border-bottom-color:#34d399!important;}
+body.dark .tbl tr:hover td{background:rgba(255,255,255,.02)!important;}
+body.dark .btn-outline{background:transparent!important;border-color:rgba(255,255,255,.13)!important;color:#94a3b8!important;}
+body.dark .inp{background:#1a1e28!important;border-color:rgba(255,255,255,.13)!important;color:#f1f5f9!important;}
+body.dark .modal{background:#111318!important;border-color:rgba(255,255,255,.13)!important;}
+body.dark .sb-item{color:#475569!important;}
+body.dark .sb-item:hover{background:#1a1e28!important;color:#f1f5f9!important;}
+body.dark .sb-item.active{background:rgba(24,67,200,.2)!important;color:#60a5fa!important;}
 </style>
 <script>
 function toggleDark(){
   let d=document.body.classList.toggle('dark');
   localStorage.setItem('spec-dark',d?'1':'0');
-  updateDarkUI(d);
 }
-function updateDarkUI(d){
-  let btn=document.getElementById('dark-btn');
-  let knob=document.getElementById('dark-knob');
-  if(btn) btn.classList.toggle('on',d);
-  if(knob) knob.style.left=d?'21px':'3px';
-}
-(function(){
-  let d=localStorage.getItem('spec-dark')==='1';
-  if(d) document.body.classList.add('dark');
-  setTimeout(()=>updateDarkUI(d),0);
-})();
+(function(){if(localStorage.getItem('spec-dark')==='1')document.body.classList.add('dark');})();
 </script>
 
 </body>
