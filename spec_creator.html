@@ -336,7 +336,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
     <div style="display:flex;gap:0;margin-bottom:24px;">
       <div class="wiz-step active" id="wiz-s1">1 Dane firmy</div>
       <div class="wiz-step" id="wiz-s2">2 Konfiguracja</div>
-      <div class="wiz-step" id="wiz-s3">3 Baza danych</div>
+      <div class="wiz-step" id="wiz-s3">3 Sheet &amp; Script</div>
       <div class="wiz-step" id="wiz-s4">4 Loginy</div>
     </div>
 
@@ -375,19 +375,19 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <div class="modal-btns"><button class="btn-outline" onclick="wizNext(1)">← Wróć</button><button class="btn" onclick="wizNext(3)">Dalej →</button></div>
     </div>
 
-    <!-- STEP 3: Google Sheet setup -->
+    <!-- STEP 3: Supabase -->
     <div id="wiz-step-3" style="display:none;">
       <h2 style="margin-bottom:16px;">☁️ Baza danych</h2>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">
-        <div style="display:flex;align-items:center;gap:12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:16px;">
-        <div style="font-size:28px;">✅</div>
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:4px;">Supabase — bez konfiguracji!</div>
-          <div style="font-size:12px;color:var(--text2);">Dane klienta zostaną automatycznie utworzone w bazie danych przy kliknięciu "Utwórz klienta". Nie musisz nic konfigurować.</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="font-size:40px;">✅</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--green);margin-bottom:6px;">Supabase — bez konfiguracji!</div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.5;">Dane klienta zostaną automatycznie utworzone w bazie danych przy kliknięciu "Utwórz klienta". Nie musisz nic konfigurować.</div>
+          </div>
         </div>
       </div>
-      </div>
-<input type="hidden" id="c-script" value="supabase"/>
+      <input type="hidden" id="c-script" value="supabase"/>
       <div class="modal-btns"><button class="btn-outline" onclick="wizNext(2)">← Wróć</button><button class="btn" onclick="wizNext(4)">Dalej →</button></div>
     </div>
 
@@ -504,43 +504,6 @@ function getSheet() {
 
 const SHEET_TEMPLATE_ID = '1gx0nLowIscnId456_gjS4ecWcC32vJ_p57agWnmJqVI';
 
-// ── SUPABASE ──────────────────────────────────────────────────
-const SB_URL = 'https://rccxsogpkqiunyooqaeg.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
-const SB_HDR = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
-
-async function sbCreateClient(client, logins) {
-  // 1. Dodaj klienta
-  await fetch(SB_URL+'/rest/v1/clients', {
-    method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
-    body: JSON.stringify({id: client.id, name: client.name})
-  });
-  // 2. Dodaj loginy
-  for (let l of logins) {
-    if (!l.email) continue;
-    await fetch(SB_URL+'/rest/v1/client_logins', {
-      method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
-      body: JSON.stringify({client_id: client.id, email: l.email, password_hash: l.pass})
-    });
-  }
-  // 3. Inicjuj dane klienta
-  await fetch(SB_URL+'/rest/v1/client_data', {
-    method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
-    body: JSON.stringify({
-      client_id: client.id,
-      data: {
-        employees: [{name:'Jan Kowalski',group:'g1'}],
-        groups: [{id:'g1',name:'I ZMIANA'}],
-        monthStatuses: {}, extraData: {}, attendance: [], delegations: []
-      }
-    })
-  });
-}
-
-const PLAN_PRICE = { trial: 0, starter: 499, business: 749, enterprise: 999 };
-const PLAN_MAXEMP = { trial: 5, starter: 20, business: 100, enterprise: 99999 };
-const PLAN_LOGINS = { trial: 1, starter: 1, business: 2, enterprise: 4 };
-
 function wizNext(step) {
   // Validate current step
   if (step === 2) {
@@ -551,9 +514,7 @@ function wizNext(step) {
     document.getElementById('c-qr-key').value = document.getElementById('c-qr-key').value || generateQRKey();
   }
   if (step === 3) {
-    let clientId = document.getElementById('c-id').value.trim();
-    document.getElementById('sheet-copy-link').href = 'https://docs.google.com/spreadsheets/d/' + SHEET_TEMPLATE_ID + '/copy?title=SPEC-' + clientId.toUpperCase();
-    document.getElementById('apps-script-code').textContent = APPS_SCRIPT_TEMPLATE;
+    // Supabase - brak konfiguracji
   }
   if (step === 4) {
     buildLoginsForms();
@@ -630,6 +591,39 @@ let settings = {
   masterScript: 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec'
 };
 
+// ── SUPABASE ──────────────────────────────────────────────────
+const SB_URL = 'https://rccxsogpkqiunyooqaeg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
+const SB_HDR = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+
+async function sbCreateClient(client, logins) {
+  await fetch(SB_URL+'/rest/v1/clients', {
+    method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
+    body: JSON.stringify({id: client.id, name: client.name})
+  });
+  for (let l of logins) {
+    if (!l.email) continue;
+    await fetch(SB_URL+'/rest/v1/client_logins', {
+      method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
+      body: JSON.stringify({client_id: client.id, email: l.email, password_hash: l.pass})
+    });
+  }
+  await fetch(SB_URL+'/rest/v1/client_data', {
+    method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'},
+    body: JSON.stringify({
+      client_id: client.id,
+      data: {
+        employees: [{name:'Jan Kowalski',group:'g1'}],
+        groups: [{id:'g1',name:'I ZMIANA'}],
+        monthStatuses:{}, extraData:{}, attendance:[], delegations:[]
+      }
+    })
+  });
+}
+
+const PLAN_PRICE = { trial: 0, starter: 499, business: 749, enterprise: 999 };
+const PLAN_MAXEMP = { trial: 5, starter: 20, business: 100, enterprise: 99999 };
+const PLAN_LOGINS = { trial: 1, starter: 1, business: 2, enterprise: 4 };
 
 let clients = [];
 let activityLog = [];
@@ -871,7 +865,7 @@ function openAddClient() {
   document.getElementById('c-phone').value = '';
   document.getElementById('c-plan').value = 'business';
   document.getElementById('c-maxemp').value = '';
-  document.getElementById('c-script').value = '';
+  document.getElementById('c-script').value = 'supabase';
   document.getElementById('c-qr-key').value = generateQRKey();
   document.getElementById('c-notes').value = '';
   wizNext(1);
@@ -927,7 +921,6 @@ async function addClient() {
     setupFee: 500
   };
 
-  // Zapisz do Supabase
   let btn = document.querySelector('#wiz-step-4 .btn:last-child');
   if (btn) { btn.textContent = 'Tworzenie...'; btn.disabled = true; }
   try {
@@ -938,7 +931,6 @@ async function addClient() {
     return;
   }
   if (btn) { btn.textContent = '✓ Utwórz klienta'; btn.disabled = false; }
-
   clients.push(client);
   saveClients();
   logActivity('add', '➕ Dodano klienta <strong>' + name + '</strong> (plan: ' + plan + ', ' + loginCount + ' loginy)');
