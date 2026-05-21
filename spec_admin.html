@@ -136,11 +136,59 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 /* TOAST */
 .toast { position: fixed; bottom: 20px; right: 20px; background: #0e1117; color: #fff; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; z-index: 100; opacity: 0; transition: opacity .3s; pointer-events: none; }
 .toast.show { opacity: 1; }
+
+/* ── Auth screen ── */
+#auth-screen {
+  display:none; align-items:center; justify-content:center;
+  min-height:100vh; background:linear-gradient(145deg,#dce6f5,#eef1f6,#e4ecf8);
+  position:fixed; inset:0; z-index:1000;
+}
+body.dark #auth-screen { background:linear-gradient(145deg,#0a1220,#111827,#0d1e30); }
+.auth-card {
+  background:#fff; border-radius:16px; padding:40px 44px;
+  box-shadow:0 12px 40px rgba(30,42,58,.13);
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+  max-width:340px; width:100%;
+}
+body.dark .auth-card { background:#1e2637; border:1px solid rgba(255,255,255,.08); }
+.auth-logo { width:56px; height:56px; background:#1843c8; border-radius:14px;
+  display:flex; align-items:center; justify-content:center; font-size:24px; }
+.auth-title { font-size:20px; font-weight:800; color:#1e2a3a; letter-spacing:-.02em; }
+body.dark .auth-title { color:#f1f5f9; }
+.auth-sub { font-size:12px; color:#9ca3af; text-align:center; }
+.auth-inp {
+  width:100%; border:1.5px solid #e2e8f0; border-radius:9px;
+  padding:10px 13px; font-size:14px; font-family:'Outfit',sans-serif;
+  background:#f4f6fa; color:#1e2a3a; outline:none; transition:border-color .2s;
+}
+.auth-inp:focus { border-color:#1843c8; }
+body.dark .auth-inp { background:#263147; border-color:rgba(255,255,255,.1); color:#f1f5f9; }
+.auth-btn {
+  width:100%; background:#1843c8; color:#fff; border:none; border-radius:9px;
+  padding:12px; font-size:14px; font-weight:700; cursor:pointer;
+  font-family:'Outfit',sans-serif; transition:background .2s; margin-top:4px;
+}
+.auth-btn:hover { background:#1236a8; }
+.auth-err { font-size:12px; color:#ef4444; text-align:center; display:none; width:100%; }
 </style>
 </head>
 <body>
 
-<div class="layout">
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">⚙️</div>
+    <div class="auth-title">SPEC Admin</div>
+    <div class="auth-sub">Panel administracyjny</div>
+    <input class="auth-inp" type="email" id="auth-email" placeholder="E-mail" autocomplete="username"/>
+    <input class="auth-inp" type="password" id="auth-password" placeholder="Hasło" autocomplete="current-password"/>
+    <button class="auth-btn" id="auth-btn">Zaloguj się</button>
+    <p class="auth-err" id="auth-err"></p>
+    <p style="font-size:10px;color:#9ca3af;margin-top:4px;">SPEC · KSM-Group · Michał Kucia</p>
+  </div>
+</div>
+
+<div class="layout" style="display:none">
   <!-- SIDEBAR -->
   <div class="sidebar">
     <div class="sidebar-logo">
@@ -360,18 +408,7 @@ let delegations = [];
 
 // ── Admin auth ──────────────────────────────────────────────────
 async function loadAdminClientConfig() {
-  let params = new URLSearchParams(window.location.search);
-  let clientId = params.get('client') || localStorage.getItem('secp-admin-client') || '';
-  if (!clientId) return;
-  ADMIN_CLIENT_ID = clientId;
-  localStorage.setItem('secp-admin-client', clientId);
-  try {
-    let r = await fetch(SB_URL + '/rest/v1/client_logins?client_id=eq.' + clientId + '&select=email,password_hash', { headers: SB_HDR });
-    let logins = await r.json();
-    if (logins && logins.length) {
-      ADMIN_LOGINS = logins.map(l => ({ email: l.email, password: l.password_hash }));
-    }
-  } catch(e) { console.log('Admin client config failed:', e); }
+  // Nie potrzebne przy logowaniu przez email - client wykrywany automatycznie
 }
 
 function adminLogout() {
@@ -383,12 +420,14 @@ function adminLogout() {
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
-  await loadAdminClientConfig();
   let saved = localStorage.getItem('secp-admin-session');
   if (saved) {
     try {
       let sess = JSON.parse(saved);
-      if (sess.email) { showAdmin(sess.email); return; }
+      if (sess.email && sess.clientId) {
+        ADMIN_CLIENT_ID = sess.clientId;
+        showAdmin(sess.email); return;
+      }
     } catch(e) {}
   }
   document.getElementById('auth-screen').style.display = 'flex';
@@ -396,16 +435,31 @@ document.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('auth-password').addEventListener('keydown', e => { if(e.key==='Enter') doAdminLogin(); });
 });
 
-function doAdminLogin() {
+async function doAdminLogin() {
   let email = document.getElementById('auth-email').value.trim();
   let pass  = document.getElementById('auth-password').value;
   let err   = document.getElementById('auth-err');
+  let btn   = document.getElementById('auth-btn');
   err.style.display = 'none';
   if (!email || !pass) { err.textContent = 'Wpisz e-mail i hasło.'; err.style.display = 'block'; return; }
-  let valid = ADMIN_LOGINS.find(u => u.email === email && u.password === pass);
-  if (!valid) { err.textContent = 'Nieprawidłowy e-mail lub hasło.'; err.style.display = 'block'; return; }
-  localStorage.setItem('secp-admin-session', JSON.stringify({ email }));
-  showAdmin(email);
+  btn.textContent = 'Logowanie...'; btn.disabled = true;
+  try {
+    // Szukaj emaila we wszystkich client_logins
+    let r = await fetch(SB_URL + '/rest/v1/client_logins?email=eq.' + encodeURIComponent(email) + '&select=client_id,password_hash', { headers: SB_HDR });
+    let rows = await r.json();
+    if (!rows || !rows.length || rows[0].password_hash !== pass) {
+      err.textContent = 'Nieprawidłowy e-mail lub hasło.'; err.style.display = 'block';
+      btn.textContent = 'Zaloguj się'; btn.disabled = false; return;
+    }
+    let clientId = rows[0].client_id;
+    ADMIN_CLIENT_ID = clientId;
+    localStorage.setItem('secp-admin-client', clientId);
+    localStorage.setItem('secp-admin-session', JSON.stringify({ email, clientId }));
+    showAdmin(email);
+  } catch(e) {
+    err.textContent = 'Błąd połączenia. Spróbuj ponownie.'; err.style.display = 'block';
+    btn.textContent = 'Zaloguj się'; btn.disabled = false;
+  }
 }
 
 function showAdmin(email) {
