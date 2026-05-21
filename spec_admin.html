@@ -137,6 +137,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .toast { position: fixed; bottom: 20px; right: 20px; background: #0e1117; color: #fff; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; z-index: 100; opacity: 0; transition: opacity .3s; pointer-events: none; }
 .toast.show { opacity: 1; }
 
+/* ── Iframe pages ── */
+.iframe-page { width:100%; height:calc(100vh - 57px); border:none; display:block; }
+
 /* ── Auth screen ── */
 #auth-screen {
   display:none; align-items:center; justify-content:center;
@@ -202,6 +205,9 @@ body.dark .auth-inp { background:#263147; border-color:rgba(255,255,255,.1); col
       <div class="nav-item" onclick="showPage('timeline')"><span class="ni">⏱️</span> Aktywność QR</div>
       <div class="nav-item" onclick="showPage('report')"><span class="ni">📄</span> Raport dzienny</div>
       <div class="nav-item" onclick="showPage('shifts')"><span class="ni">⏰</span> Ustawienia zmian</div>
+      <div style="height:1px;background:rgba(255,255,255,.07);margin:10px 0;"></div>
+      <div class="nav-item" onclick="showPage('lista')"><span class="ni">📋</span> Lista obecności</div>
+      <div class="nav-item" onclick="showPage('dash')"><span class="ni">📈</span> Dashboard analityczny</div>
     </div>
     <div class="sidebar-footer">
       <a href="https://ksm-group.github.io/lista-obecnosci/">← Lista obecności</a>
@@ -222,7 +228,7 @@ body.dark .auth-inp { background:#263147; border-color:rgba(255,255,255,.1); col
         <span class="toggle-icon">🌙</span>
       </div>
       <button class="btn" onclick="showPage('report')">📄 Raport dzienny</button>
-      <button class="btn-outline" onclick="adminLogout()" style="margin-left:4px;">Wyloguj</button>
+      <button class="btn-outline" onclick="adminLogout()">Wyloguj</button>
     </div>
 
     <div class="content">
@@ -364,6 +370,16 @@ body.dark .auth-inp { background:#263147; border-color:rgba(255,255,255,.1); col
             <tbody id="late-tbody"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- LISTA OBECNOŚCI -->
+      <div class="page" id="page-lista" style="margin:-24px -28px;">
+        <iframe id="iframe-lista" class="iframe-page" src="about:blank"></iframe>
+      </div>
+
+      <!-- DASHBOARD ANALITYCZNY -->
+      <div class="page" id="page-dash" style="margin:-24px -28px;">
+        <iframe id="iframe-dash" class="iframe-page" src="about:blank"></iframe>
       </div>
 
     </div>
@@ -825,9 +841,29 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  let titles = {dashboard:'Dashboard',today:'Dziś',delegations:'Delegacje',timeline:'Aktywność QR',report:'Raport dzienny'};
+  let titles = {
+    dashboard:'Dashboard', today:'Dziś', delegations:'Delegacje',
+    timeline:'Aktywność QR', report:'Raport dzienny', shifts:'Ustawienia zmian',
+    lista:'Lista obecności', dash:'Dashboard analityczny'
+  };
   document.getElementById('page-title').textContent = titles[name] || name;
   event.currentTarget.classList.add('active');
+
+  // Załaduj iframe przy pierwszym otwarciu
+  let clientId = ADMIN_CLIENT_ID || localStorage.getItem('secp-admin-client') || '';
+  let param = clientId ? '?client=' + clientId : '';
+  if (name === 'lista') {
+    let fr = document.getElementById('iframe-lista');
+    if (fr.src === 'about:blank' || fr.src === window.location.href) {
+      fr.src = 'https://ksm-group.github.io/lista-obecnosci/index.html' + param;
+    }
+  }
+  if (name === 'dash') {
+    let fr = document.getElementById('iframe-dash');
+    if (fr.src === 'about:blank' || fr.src === window.location.href) {
+      fr.src = 'https://ksm-group.github.io/lista-obecnosci/dashboard.html' + param;
+    }
+  }
 }
 
 function showToast(msg) {
