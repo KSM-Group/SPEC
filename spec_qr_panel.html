@@ -460,6 +460,7 @@ body::before {
   <div class="status-item"><div class="status-dot"></div> System aktywny</div>
   <div class="status-item" id="status-company">📍 Firma: —</div>
   
+  <div class="status-item" id="status-client">🏢 Klient: —</div>
   <div class="status-item">🔒 Zabezpieczenie: HMAC</div>
 </div>
 
@@ -529,13 +530,6 @@ body::before {
       <input type="text" id="s-empurl" placeholder="https://ksm-group.github.io/SPEC/spec_employee.html"/>
     </div>
     <div class="form-row">
-      <label>Ewidencja przerw</label>
-      <select id="s-breaks" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;outline:none;">
-        <option value="1">Włączona — pokazuj kody przerw</option>
-        <option value="0">Wyłączona — ukryj kody przerw</option>
-      </select>
-    </div>
-    <div class="form-row">
       <label>Zmień PIN admina</label>
       <input type="text" id="s-pin" placeholder="4 cyfry" maxlength="4" value=""/>
     </div>
@@ -550,13 +544,18 @@ body::before {
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────
+// Klucze localStorage per klient — każdy klient ma własny PIN i ustawienia
+const QR_CLIENT_ID = new URLSearchParams(window.location.search).get('client') || 'default';
+const QR_CFG_KEY   = 'secp-qr-cfg-' + QR_CLIENT_ID;
+const QR_PIN_KEY   = 'secp-qr-pin-' + QR_CLIENT_ID;
+
 let cfg = {
   name: 'Moja Firma',
   secret: 'SPEC-2026',
   interval: 15,
   cycle: 20,
   showBreaks: true,
-  empUrl: window.location.origin + window.location.pathname.replace('spec_qr_panel.html','') + 'spec_employee.html'
+  empUrl: window.location.origin + window.location.pathname.replace('spec_qr_panel.html','') + 'spec_employee.html' + (new URLSearchParams(window.location.search).get('client') ? '?client=' + new URLSearchParams(window.location.search).get('client') : '')
 };
 
 const ACTIONS = ['entry','exit','break-start','break-end'];
@@ -568,14 +567,6 @@ let secondsLeft = 0;
 let totalSeconds = 0;
 
 // ── INIT ──────────────────────────────────────────────────────
-function applyBreakVisibility() {
-  let show = cfg.showBreaks !== false;
-  let bsCard = document.getElementById('card-break-start');
-  let beCard = document.getElementById('card-break-end');
-  if (bsCard) bsCard.style.display = show ? '' : 'none';
-  if (beCard) beCard.style.display = show ? '' : 'none';
-}
-
 window.onload = function() {
   loadSettings();
   buildCycleDots();
@@ -609,7 +600,6 @@ function initQRs() {
   generateAllQRs();
   updateCycleDots();
   updateProgressBars();
-  applyBreakVisibility();
 }
 
 function generateAllQRs() {
@@ -635,6 +625,8 @@ function generateAllQRs() {
   });
 
   document.getElementById('status-company').textContent = '📍 ' + cfg.name;
+  let sc = document.getElementById('status-client');
+  if (sc) sc.textContent = '🏢 Klient: ' + QR_CLIENT_ID;
 }
 
 function generateToken(action, cycleIdx) {
@@ -727,28 +719,24 @@ function updateCycleDots() {
 
 // ── SETTINGS ─────────────────────────────────────────────────
 function loadSettings() {
-  let saved = localStorage.getItem('secp-qr-panel-cfg');
+  let saved = localStorage.getItem(QR_CFG_KEY);
   if (saved) cfg = Object.assign(cfg, JSON.parse(saved));
   document.getElementById('s-name').value     = cfg.name;
   document.getElementById('s-secret').value   = cfg.secret;
   document.getElementById('s-interval').value = cfg.interval;
   document.getElementById('s-cycle').value    = cfg.cycle;
   document.getElementById('s-empurl').value   = cfg.empUrl;
-  document.getElementById('s-breaks').value   = cfg.showBreaks ? '1' : '0';
-  applyBreakVisibility();
 }
 
 function saveSettings() {
-  cfg.name       = document.getElementById('s-name').value;
-  cfg.secret     = document.getElementById('s-secret').value;
-  cfg.interval   = parseInt(document.getElementById('s-interval').value);
-  cfg.cycle      = parseInt(document.getElementById('s-cycle').value);
-  cfg.empUrl     = document.getElementById('s-empurl').value;
-  cfg.showBreaks = document.getElementById('s-breaks').value === '1';
+  cfg.name     = document.getElementById('s-name').value;
+  cfg.secret   = document.getElementById('s-secret').value;
+  cfg.interval = parseInt(document.getElementById('s-interval').value);
+  cfg.cycle    = parseInt(document.getElementById('s-cycle').value);
+  cfg.empUrl   = document.getElementById('s-empurl').value;
   let newPin = document.getElementById('s-pin').value;
-  if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) { adminPin = newPin; localStorage.setItem('secp-admin-pin', newPin); }
-  localStorage.setItem('secp-qr-panel-cfg', JSON.stringify(cfg));
-  applyBreakVisibility();
+  if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) { adminPin = newPin; localStorage.setItem(QR_PIN_KEY, newPin); }
+  localStorage.setItem(QR_CFG_KEY, JSON.stringify(cfg));
   closeSettings();
   buildCycleDots();
   initQRs();
@@ -761,7 +749,7 @@ function closeSettingsOutside(e) { if (e.target === document.getElementById('set
 
 // ── PIN ───────────────────────────────────────────────────────
 let pinBuffer = '';
-let adminPin = localStorage.getItem('secp-admin-pin') || '7777';
+let adminPin = localStorage.getItem(QR_PIN_KEY) || '7777';
 
 function openSettings() {
   pinBuffer = '';
