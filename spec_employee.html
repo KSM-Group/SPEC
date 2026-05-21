@@ -591,12 +591,19 @@ let todayEvents = [];
 let workTimerInterval = null;
 
 const SECP_DATA_KEY = 'secp-emp-data';
-const SECP_GOOGLE_SCRIPT = 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec';
+const SB_URL = 'https://rccxsogpkqiunyooqaeg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
+const SB_HDR = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+let SECP_CLIENT_ID = '';
+async function sbGet(cId){let r=await fetch(SB_URL+'/rest/v1/client_data?client_id=eq.'+cId+'&select=data',{headers:SB_HDR});let rows=await r.json();return(rows&&rows.length)?rows[0].data:null;}
+async function sbSet(cId,data){let r=await fetch(SB_URL+'/rest/v1/client_data?client_id=eq.'+cId,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify({data,updated_at:new Date().toISOString()})});if(!r.ok){await fetch(SB_URL+'/rest/v1/client_data',{method:'POST',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify({client_id:cId,data})});}}
 
 // ── INIT ──────────────────────────────────────────────────────
 window.onload = function() {
-  // Check URL params for QR scan - only process ONCE
   let params = new URLSearchParams(window.location.search);
+  let client = params.get('client');
+  if (client) { SECP_CLIENT_ID = client; localStorage.setItem('secp-client-id', client); }
+  else { SECP_CLIENT_ID = localStorage.getItem('secp-client-id') || 'default'; }
   let action = params.get('action');
   let token  = params.get('token');
   // Clear URL params immediately to prevent re-processing on refresh
@@ -644,10 +651,10 @@ async function doLogin() {
 
   // Load employee list from Google Sheets
   try {
-    let resp = await fetch(SECP_GOOGLE_SCRIPT);
-    let raw = await resp.text();
-    let data = JSON.parse(raw);
-    let employees = data.employees || [];
+    let cId=SECP_CLIENT_ID||'default';
+    let data=await sbGet(cId);
+    if(!data)throw new Error('Brak danych');
+    let employees=data.employees||[];
     let found = employees.find(e => e.name.toLowerCase() === fullName.toLowerCase());
 
     if (!found) {
@@ -960,10 +967,8 @@ function loadTodayState() {
 // ── GOOGLE SYNC ───────────────────────────────────────────────
 async function syncToGoogle(event) {
   try {
-    // Read current data, add event, write back
-    let resp = await fetch(SECP_GOOGLE_SCRIPT);
-    let raw = await resp.text();
-    let data = JSON.parse(raw);
+    let cId = SECP_CLIENT_ID || 'default';
+    let data = await sbGet(cId) || {};
     if (!data.attendance) data.attendance = [];
 
     data.attendance.push({
@@ -972,7 +977,7 @@ async function syncToGoogle(event) {
       date: new Date().toISOString().slice(0,10)
     });
 
-    await fetch(SECP_GOOGLE_SCRIPT, { method: 'POST', body: JSON.stringify(data) });
+    await sbSet(SECP_CLIENT_ID||'default', data);
   } catch(e) {
     console.log('Sync error (offline mode):', e);
   }

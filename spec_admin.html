@@ -324,7 +324,33 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 <div class="toast" id="toast"></div>
 
 <script>
-const GOOGLE_SCRIPT = 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec';
+// ══ SUPABASE ════════════════════════════════════════════════════
+const SB_URL = 'https://rccxsogpkqiunyooqaeg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
+const SB_HDR = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+let ADMIN_CLIENT_ID = '';
+let ADMIN_LOGINS = [];
+
+async function sbLoadData(clientId) {
+  let r = await fetch(SB_URL + '/rest/v1/client_data?client_id=eq.' + clientId + '&select=data', { headers: SB_HDR });
+  let rows = await r.json();
+  return (rows && rows.length) ? rows[0].data : null;
+}
+
+async function sbSaveData(clientId, data) {
+  let r = await fetch(SB_URL + '/rest/v1/client_data?client_id=eq.' + clientId, {
+    method: 'PATCH',
+    headers: { ...SB_HDR, 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ data, updated_at: new Date().toISOString() })
+  });
+  if (!r.ok || r.status === 404) {
+    await fetch(SB_URL + '/rest/v1/client_data', {
+      method: 'POST',
+      headers: { ...SB_HDR, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ client_id: clientId, data })
+    });
+  }
+}
 
 let allData = {};
 let employees = [];
@@ -332,20 +358,72 @@ let groups = [];
 let attendance = [];
 let delegations = [];
 
-window.onload = function() {
+// ── Admin auth ──────────────────────────────────────────────────
+async function loadAdminClientConfig() {
+  let params = new URLSearchParams(window.location.search);
+  let clientId = params.get('client') || localStorage.getItem('secp-admin-client') || '';
+  if (!clientId) return;
+  ADMIN_CLIENT_ID = clientId;
+  localStorage.setItem('secp-admin-client', clientId);
+  try {
+    let r = await fetch(SB_URL + '/rest/v1/client_logins?client_id=eq.' + clientId + '&select=email,password_hash', { headers: SB_HDR });
+    let logins = await r.json();
+    if (logins && logins.length) {
+      ADMIN_LOGINS = logins.map(l => ({ email: l.email, password: l.password_hash }));
+    }
+  } catch(e) { console.log('Admin client config failed:', e); }
+}
+
+function adminLogout() {
+  localStorage.removeItem('secp-admin-session');
+  document.getElementById('layout').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-password').value = '';
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+  await loadAdminClientConfig();
+  let saved = localStorage.getItem('secp-admin-session');
+  if (saved) {
+    try {
+      let sess = JSON.parse(saved);
+      if (sess.email) { showAdmin(sess.email); return; }
+    } catch(e) {}
+  }
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('auth-btn').addEventListener('click', doAdminLogin);
+  document.getElementById('auth-password').addEventListener('keydown', e => { if(e.key==='Enter') doAdminLogin(); });
+});
+
+function doAdminLogin() {
+  let email = document.getElementById('auth-email').value.trim();
+  let pass  = document.getElementById('auth-password').value;
+  let err   = document.getElementById('auth-err');
+  err.style.display = 'none';
+  if (!email || !pass) { err.textContent = 'Wpisz e-mail i hasło.'; err.style.display = 'block'; return; }
+  let valid = ADMIN_LOGINS.find(u => u.email === email && u.password === pass);
+  if (!valid) { err.textContent = 'Nieprawidłowy e-mail lub hasło.'; err.style.display = 'block'; return; }
+  localStorage.setItem('secp-admin-session', JSON.stringify({ email }));
+  showAdmin(email);
+}
+
+function showAdmin(email) {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('layout').style.display = 'flex';
   let now = new Date();
   document.getElementById('topbar-date').textContent = now.toLocaleDateString('pl-PL', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('today-date-label').textContent = now.toLocaleDateString('pl-PL');
   document.getElementById('report-date-label').textContent = now.toLocaleDateString('pl-PL', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
   loadData();
-  setInterval(loadData, 60000); // Refresh every minute
-};
+  setInterval(loadData, 60000);
+}
+// ── window.onload zastąpiony przez DOMContentLoaded powyżej ──────
 
 async function loadData() {
   try {
-    let resp = await fetch(GOOGLE_SCRIPT);
-    let raw = await resp.text();
-    allData = JSON.parse(raw);
+    let clientId = ADMIN_CLIENT_ID || localStorage.getItem('secp-admin-client') || 'default';
+    allData = await sbLoadData(clientId) || {};
     employees = (allData.employees || []).map(e => typeof e === 'string' ? {name:e,group:''} : e);
     groups = allData.groups || [];
     attendance = allData.attendance || [];
@@ -358,7 +436,6 @@ async function loadData() {
     renderReport();
     updateBadges();
   } catch(e) {
-    // Demo data if no connection
     loadDemoData();
   }
 }
@@ -667,7 +744,8 @@ async function rejectDelegation(i) {
 async function saveData() {
   try {
     allData.delegations = delegations;
-    await fetch(GOOGLE_SCRIPT, { method:'POST', body: JSON.stringify(allData) });
+    let cId = ADMIN_CLIENT_ID || localStorage.getItem('secp-admin-client') || 'default';
+    await sbSaveData(cId, allData);
   } catch(e) { console.log('Save error:', e); }
 }
 
