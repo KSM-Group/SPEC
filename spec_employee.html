@@ -601,6 +601,7 @@ async function sbSet(cId,data){let r=await fetch(SB_URL+'/rest/v1/client_data?cl
 // ── INIT ──────────────────────────────────────────────────────
 window.onload = function() {
   let params = new URLSearchParams(window.location.search);
+  // Pobierz client_id z URL
   let client = params.get('client');
   if (client) { SECP_CLIENT_ID = client; localStorage.setItem('secp-client-id', client); }
   else { SECP_CLIENT_ID = localStorage.getItem('secp-client-id') || 'default'; }
@@ -649,12 +650,12 @@ async function doLogin() {
   let fullName = first + ' ' + last;
   let err = document.getElementById('login-error');
 
-  // Load employee list from Google Sheets
+  // Załaduj listę pracowników z Supabase
   try {
-    let cId=SECP_CLIENT_ID||'default';
-    let data=await sbGet(cId);
-    if(!data)throw new Error('Brak danych');
-    let employees=data.employees||[];
+    let cId = SECP_CLIENT_ID || 'default';
+    let data = await sbGet(cId);
+    if (!data) throw new Error('Brak danych');
+    let employees = data.employees || [];
     let found = employees.find(e => e.name.toLowerCase() === fullName.toLowerCase());
 
     if (!found) {
@@ -967,17 +968,15 @@ function loadTodayState() {
 // ── GOOGLE SYNC ───────────────────────────────────────────────
 async function syncToGoogle(event) {
   try {
-    let cId = SECP_CLIENT_ID || 'default';
+    let cId = SECP_CLIENT_ID || localStorage.getItem('secp-client-id') || 'default';
     let data = await sbGet(cId) || {};
     if (!data.attendance) data.attendance = [];
-
     data.attendance.push({
       employee: currentEmployee ? currentEmployee.name : '?',
       ...event,
       date: new Date().toISOString().slice(0,10)
     });
-
-    await sbSet(SECP_CLIENT_ID||'default', data);
+    await sbSet(cId, data);
   } catch(e) {
     console.log('Sync error (offline mode):', e);
   }
