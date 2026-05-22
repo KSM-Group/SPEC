@@ -430,6 +430,8 @@ async function loadAdminClientConfig() {
 
 function adminLogout() {
   localStorage.removeItem('secp-admin-session');
+  localStorage.removeItem('secp-admin-client');
+  ADMIN_CLIENT_ID = '';
   document.getElementById('layout').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('auth-email').value = '';
@@ -437,13 +439,21 @@ function adminLogout() {
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
+  // ?client= w URL ma zawsze priorytet
+  let urlClient = new URLSearchParams(window.location.search).get('client');
   let saved = localStorage.getItem('secp-admin-session');
   if (saved) {
     try {
       let sess = JSON.parse(saved);
       if (sess.email && sess.clientId) {
-        ADMIN_CLIENT_ID = sess.clientId;
-        showAdmin(sess.email); return;
+        // Jeśli URL ma inny client niż sesja - wyloguj
+        if (urlClient && urlClient !== sess.clientId) {
+          localStorage.removeItem('secp-admin-session');
+          localStorage.removeItem('secp-admin-client');
+        } else {
+          ADMIN_CLIENT_ID = sess.clientId;
+          showAdmin(sess.email); return;
+        }
       }
     } catch(e) {}
   }
