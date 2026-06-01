@@ -522,24 +522,10 @@ async function loadData() {
 }
 
 function loadDemoData() {
-  let today = new Date().toISOString().slice(0,10);
-  employees = [
-    {name:'Anna Kowalska',group:'g1'},{name:'Piotr Nowak',group:'g1'},
-    {name:'Marek Wiśniewski',group:'g2'},{name:'Karolina Dąbrowska',group:'g2'},
-    {name:'Tomasz Barcik',group:'g1'}
-  ];
-  groups = [{id:'g1',name:'I ZMIANA'},{id:'g2',name:'II ZMIANA'}];
-  attendance = [
-    {employee:'Anna Kowalska',action:'entry',time:'06:05',date:today},
-    {employee:'Piotr Nowak',action:'entry',time:'06:32',date:today},
-    {employee:'Marek Wiśniewski',action:'entry',time:'14:02',date:today},
-    {employee:'Anna Kowalska',action:'break-start',time:'10:00',date:today},
-    {employee:'Anna Kowalska',action:'break-end',time:'10:15',date:today},
-    {employee:'Piotr Nowak',action:'exit',time:'14:00',date:today},
-  ];
-  delegations = [
-    {employee:'Karolina Dąbrowska',time:'08:30',date:today,text:'Wizyta u klienta w Warszawie, szacowany czas 4h',status:'pending'},
-  ];
+  employees = [{name:'Jan Kowalski',group:'g1'}];
+  groups = [{id:'g1',name:'I ZMIANA'}];
+  attendance = [];
+  delegations = [];
   renderDashboard();
   renderToday();
   renderDelegations();
