@@ -450,13 +450,18 @@ body {
   position: relative;
   min-height: 0;
   background: #000;
+  overflow: hidden;
 }
-#qr-video {
-  display: block;
+#qr-reader {
   width: 100%;
   height: 100%;
-  object-fit: cover;
 }
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+#qr-reader img[alt="Info icon"] { display: none !important; }
 .qr-scan-hint {
   flex-shrink: 0;
   padding: 12px 20px calc(16px + var(--safe-bottom));
@@ -466,12 +471,7 @@ body {
   background: rgba(0,0,0,.85);
 }
 </style>
-<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
-<script>
-  if (typeof QrScanner !== 'undefined') {
-    QrScanner.WORKER_PATH = 'https://unpkg.com/qr-scanner@1.4.2/qr-scanner-worker.min.js';
-  }
-</script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
@@ -620,11 +620,8 @@ body {
   <div class="qr-scan-header">
     <button type="button" onclick="closeCam()">✕ Zamknij</button>
     <div class="qr-scan-title">Skieruj aparat na kod QR</div>
-    <button type="button" class="qr-torch-btn hidden" id="qr-torch-btn" onclick="toggleQrTorch()" title="Latarka">🔦</button>
   </div>
-  <div class="qr-scan-viewport">
-    <video id="qr-video" playsinline muted></video>
-  </div>
+  <div class="qr-scan-viewport" id="qr-reader"></div>
   <div class="qr-scan-hint">Trzymaj telefon stabilnie · kod z panelu przy wejściu</div>
 </div>
 
@@ -1070,111 +1067,138 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
 }
 
-// ── Camera QR Scanner (Nimiq qr-scanner — BarcodeDetector + worker) ──
-let qrScanner = null;
+// ── Camera QR Scanner ─────────────────────────────────────────
+// WAŻNE: bez await przed start() — inaczej iOS traci „gest użytkownika” i kamera się nie włącza.
+let html5Qr = null;
 let qrScanHandled = false;
 let qrOpening = false;
 
-async function openCamera() {
+function openCamera() {
   if (qrOpening) return;
-  if (typeof QrScanner === 'undefined') {
-    showEmpToast('Skaner niedostępny — odśwież stronę');
+
+  if (!window.isSecureContext) {
+    showEmpToast('Kamera działa tylko przez HTTPS (np. GitHub Pages)');
+    return;
+  }
+  if (typeof Html5Qrcode === 'undefined') {
+    showEmpToast('Skaner nie załadowany — sprawdź internet');
     return;
   }
 
   qrOpening = true;
-  await closeCam();
-
-  let overlay = document.getElementById('qr-reader-overlay');
-  let video = document.getElementById('qr-video');
-  overlay.classList.add('open');
-  overlay.setAttribute('aria-hidden', 'false');
   qrScanHandled = false;
 
-  let hasCam = await QrScanner.hasCamera();
-  if (!hasCam) {
-    showEmpToast('Brak kamery lub brak uprawnień');
-    await closeCam();
-    qrOpening = false;
-    return;
+  let overlay = document.getElementById('qr-reader-overlay');
+  let readerEl = document.getElementById('qr-reader');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  readerEl.innerHTML = '';
+
+  function bootScanner() {
+    html5Qr = new Html5Qrcode('qr-reader', {
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+      verbose: false,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    });
+
+    let side = Math.min(window.innerWidth, window.innerHeight, 400);
+    side = Math.max(220, Math.floor(side * 0.75));
+
+    let config = {
+      fps: 15,
+      qrbox: { width: side, height: side },
+      aspectRatio: 1.333333,
+      disableFlip: false
+    };
+
+    function restartCam(cameraIdOrConstraints) {
+      let stopP = html5Qr.isScanning ? html5Qr.stop() : Promise.resolve();
+      return stopP.catch(() => {}).then(() =>
+        html5Qr.start(
+          cameraIdOrConstraints,
+          config,
+          (text) => handleQrDecoded(text),
+          () => {}
+        )
+      );
+    }
+
+    html5Qr.start(
+      { facingMode: 'environment' },
+      config,
+      (text) => handleQrDecoded(text),
+      () => {}
+    ).then(() => {
+      qrOpening = false;
+    }).catch((err) => {
+      console.warn('Kamera tylna — ponowna próba:', err);
+      return restartCam({ facingMode: 'environment' });
+    }).then(() => {
+      qrOpening = false;
+    }).catch((err) => {
+      console.warn('Kamera przednia jako zapas:', err);
+      return restartCam({ facingMode: 'user' });
+    }).then(() => {
+      qrOpening = false;
+    }).catch((err) => {
+      console.error('Camera error:', err);
+      qrOpening = false;
+      showEmpToast(cameraErrorMessage(err));
+      closeCam();
+    });
   }
 
-  qrScanner = new QrScanner(
-    video,
-    (text) => handleQrDecoded(text),
-    {
-      preferredCamera: 'environment',
-      maxScansPerSecond: 20,
-      highlightScanRegion: true,
-      highlightCodeOutline: true,
-      calculateScanRegion: (v) => {
-        let min = Math.min(v.videoWidth, v.videoHeight);
-        let side = Math.round(min * 0.72);
-        return {
-          x: Math.round((v.videoWidth - side) / 2),
-          y: Math.round((v.videoHeight - side) / 2),
-          width: side,
-          height: side,
-          downScaledWidth: Math.min(400, side),
-          downScaledHeight: Math.min(400, side)
-        };
-      },
-      onDecodeError: () => {}
+  if (html5Qr && html5Qr.isScanning) {
+    html5Qr.stop().then(() => {
+      html5Qr.clear().catch(() => {});
+      html5Qr = null;
+      bootScanner();
+    }).catch(() => {
+      html5Qr = null;
+      bootScanner();
+    });
+  } else {
+    if (html5Qr) {
+      try { html5Qr.clear(); } catch (e) {}
+      html5Qr = null;
     }
-  );
-
-  try {
-    await qrScanner.start();
-    let torchBtn = document.getElementById('qr-torch-btn');
-    if (torchBtn) {
-      let canFlash = await QrScanner.hasFlash();
-      torchBtn.classList.toggle('hidden', !canFlash);
-    }
-  } catch (err) {
-    console.error('Camera error:', err);
-    showEmpToast(cameraErrorMessage(err));
-    await closeCam();
-  } finally {
-    qrOpening = false;
+    bootScanner();
   }
 }
 
 function cameraErrorMessage(err) {
+  let msg = (err && err.message) ? String(err.message) : '';
   let name = err && err.name ? err.name : '';
-  if (name === 'NotAllowedError') return 'Zezwól na dostęp do kamery w ustawieniach';
-  if (name === 'NotFoundError') return 'Nie znaleziono kamery';
-  if (name === 'NotReadableError') return 'Kamera zajęta przez inną aplikację';
-  return 'Nie udało się uruchomić kamery';
+  if (name === 'NotAllowedError' || /permission/i.test(msg)) {
+    return 'Zezwól na kamerę w ustawieniach przeglądarki';
+  }
+  if (name === 'NotFoundError') return 'Nie znaleziono kamery w urządzeniu';
+  if (name === 'NotReadableError') return 'Kamera używana przez inną aplikację';
+  if (/secure/i.test(msg)) return 'Otwórz stronę przez HTTPS, nie z pliku na dysku';
+  return 'Nie udało się uruchomić kamery — odśwież stronę';
 }
 
-async function closeCam() {
+function closeCam() {
   qrScanHandled = false;
-  let torchBtn = document.getElementById('qr-torch-btn');
-  if (torchBtn) torchBtn.classList.add('hidden');
+  qrOpening = false;
 
-  if (qrScanner) {
-    try {
-      if (qrScanner.isFlashOn()) await qrScanner.turnFlashOff();
-      qrScanner.stop();
-      qrScanner.destroy();
-    } catch (e) { /* ignore */ }
-    qrScanner = null;
+  if (html5Qr) {
+    let scanner = html5Qr;
+    html5Qr = null;
+    if (scanner.isScanning) {
+      scanner.stop().then(() => scanner.clear().catch(() => {})).catch(() => {});
+    } else {
+      try { scanner.clear(); } catch (e) {}
+    }
   }
 
   let overlay = document.getElementById('qr-reader-overlay');
+  let readerEl = document.getElementById('qr-reader');
   if (overlay) {
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
   }
-}
-
-async function toggleQrTorch() {
-  if (!qrScanner) return;
-  try {
-    await qrScanner.toggleFlash();
-  } catch (e) {
-    showEmpToast('Latarka niedostępna');
-  }
+  if (readerEl) readerEl.innerHTML = '';
 }
 
 function handleQrDecoded(text) {
@@ -1185,7 +1209,7 @@ function handleQrDecoded(text) {
   qrScanHandled = true;
   if (navigator.vibrate) navigator.vibrate(40);
   onQRFound(payload);
-  setTimeout(() => closeCam(), 200);
+  setTimeout(closeCam, 200);
 }
 
 function parseQrPayload(text) {
