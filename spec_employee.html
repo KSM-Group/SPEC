@@ -1025,10 +1025,10 @@ function openCamera() {
   html5QrScanner.start(
     { facingMode: "environment" },
     {
-      fps: 10,
-      qrbox: { width: Math.min(w * 0.7, 280), height: Math.min(w * 0.7, 280) },
+      fps: 15,
+      qrbox: { width: 200, height: 200 },
       aspectRatio: h / w,
-      videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+      videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
     },
     (decodedText) => {
       onQRFound(decodedText);
