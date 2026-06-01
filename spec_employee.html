@@ -591,22 +591,30 @@ let todayEvents = [];
 let workTimerInterval = null;
 
 const SECP_DATA_KEY = 'secp-emp-data';
-const SB_URL = 'https://rccxsogpkqiunyooqaeg.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
-const SB_HDR = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+const SECP_GOOGLE_SCRIPT = 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec';
+
+// ── CLIENT ID ─────────────────────────────────────────────────
 let SECP_CLIENT_ID = '';
-async function sbGet(cId){let r=await fetch(SB_URL+'/rest/v1/client_data?client_id=eq.'+cId+'&select=data',{headers:SB_HDR});let rows=await r.json();return(rows&&rows.length)?rows[0].data:null;}
-async function sbSet(cId,data){let r=await fetch(SB_URL+'/rest/v1/client_data?client_id=eq.'+cId,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify({data,updated_at:new Date().toISOString()})});if(!r.ok){await fetch(SB_URL+'/rest/v1/client_data',{method:'POST',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify({client_id:cId,data})});}}
+function getScriptUrl() {
+  return SECP_CLIENT_ID
+    ? SECP_GOOGLE_SCRIPT + '?clientId=' + encodeURIComponent(SECP_CLIENT_ID)
+    : SECP_GOOGLE_SCRIPT;
+}
 
 // ── INIT ──────────────────────────────────────────────────────
 window.onload = function() {
+  // Check URL params for QR scan - only process ONCE
   let params = new URLSearchParams(window.location.search);
-  // Pobierz client_id z URL
-  let client = params.get('client');
-  if (client) { SECP_CLIENT_ID = client; localStorage.setItem('secp-client-id', client); }
-  else { SECP_CLIENT_ID = localStorage.getItem('secp-client-id') || 'default'; }
   let action = params.get('action');
   let token  = params.get('token');
+  let client = params.get('client');
+  // Zapisz client ID
+  if (client) {
+    SECP_CLIENT_ID = client;
+    localStorage.setItem('secp-client-id', client);
+  } else {
+    SECP_CLIENT_ID = localStorage.getItem('secp-client-id') || '';
+  }
   // Clear URL params immediately to prevent re-processing on refresh
   if (action || token) {
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -650,11 +658,11 @@ async function doLogin() {
   let fullName = first + ' ' + last;
   let err = document.getElementById('login-error');
 
-  // Załaduj listę pracowników z Supabase
+  // Load employee list from Google Sheets
   try {
-    let cId = SECP_CLIENT_ID || 'default';
-    let data = await sbGet(cId);
-    if (!data) throw new Error('Brak danych');
+    let resp = await fetch(getScriptUrl());
+    let raw = await resp.text();
+    let data = JSON.parse(raw);
     let employees = data.employees || [];
     let found = employees.find(e => e.name.toLowerCase() === fullName.toLowerCase());
 
@@ -968,15 +976,19 @@ function loadTodayState() {
 // ── GOOGLE SYNC ───────────────────────────────────────────────
 async function syncToGoogle(event) {
   try {
-    let cId = SECP_CLIENT_ID || localStorage.getItem('secp-client-id') || 'default';
-    let data = await sbGet(cId) || {};
+    // Read current data, add event, write back
+    let resp = await fetch(getScriptUrl());
+    let raw = await resp.text();
+    let data = JSON.parse(raw);
     if (!data.attendance) data.attendance = [];
+
     data.attendance.push({
       employee: currentEmployee ? currentEmployee.name : '?',
       ...event,
       date: new Date().toISOString().slice(0,10)
     });
-    await sbSet(cId, data);
+
+    await fetch(getScriptUrl(), { method: 'POST', body: JSON.stringify({...data, clientId: SECP_CLIENT_ID}) });
   } catch(e) {
     console.log('Sync error (offline mode):', e);
   }
@@ -1025,10 +1037,10 @@ function openCamera() {
   html5QrScanner.start(
     { facingMode: "environment" },
     {
-      fps: 15,
-      qrbox: { width: 200, height: 200 },
+      fps: 10,
+      qrbox: { width: Math.min(w * 0.7, 280), height: Math.min(w * 0.7, 280) },
       aspectRatio: h / w,
-      videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
+      videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
     },
     (decodedText) => {
       onQRFound(decodedText);
