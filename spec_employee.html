@@ -509,18 +509,19 @@ body {
   font-family: inherit;
   cursor: pointer;
 }
-#qr-photo-btn {
+#qr-live-btn {
   background: var(--green);
   color: #fff;
   border: none;
   font-size: 15px;
   box-shadow: 0 4px 14px rgba(16,185,129,.35);
 }
-#qr-live-btn {
+#qr-photo-btn {
   background: rgba(255,255,255,.12);
   color: #fff;
   border: 1px solid rgba(255,255,255,.25);
 }
+#qr-live-reader video { cursor: pointer; }
 #qr-file-input { display: none; }
 </style>
 <meta http-equiv="Permissions-Policy" content="camera=(self)"/>
@@ -684,8 +685,8 @@ body {
   <canvas id="qr-canvas"></canvas>
   <div class="qr-scan-hint" id="qr-scan-hint">Wybierz sposób skanowania poniżej</div>
   <div class="qr-scan-actions">
-    <button type="button" id="qr-photo-btn" onclick="openQrPhotoCapture()">📷 Skanuj aparatem telefonu</button>
-    <button type="button" id="qr-live-btn" onclick="startLiveScanner()">▶ Skaner na żywo (opcjonalnie)</button>
+    <button type="button" id="qr-live-btn" onclick="startLiveScanner()">▶ Skaner na żywo</button>
+    <button type="button" id="qr-photo-btn" onclick="openQrPhotoCapture()">📷 Zdjęcie (gdy rozmyte)</button>
     <input type="file" id="qr-file-input" accept="image/*" capture="environment"/>
   </div>
 </div>
@@ -1133,11 +1134,10 @@ function showScreen(name) {
 }
 
 // ── QR Scanner ────────────────────────────────────────────────
-// Główna ścieżka: aparat systemowy (zdjęcie) — działa bez getUserMedia w PWA.
-// Opcjonalnie: skan na żywo (html5-qrcode).
 let html5Qr = null;
 let qrScanHandled = false;
 let qrLiveStarting = false;
+let qrFocusTimer = 0;
 
 function setQrHint(text) {
   let el = document.getElementById('qr-scan-hint');
@@ -1163,8 +1163,7 @@ function openQrScanner() {
   let overlay = document.getElementById('qr-reader-overlay');
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
-  setQrHint('Otwieram aparat telefonu…');
-  openQrPhotoCapture();
+  startLiveScanner();
 }
 
 function openQrPhotoCapture() {
@@ -1174,11 +1173,15 @@ function openQrPhotoCapture() {
   }
   let fi = document.getElementById('qr-file-input');
   if (!fi) return;
-  setQrHint('Zrób zdjęcie kodu QR z panelu przy wejściu…');
+  setQrHint('Poczekaj aż aparat sam wyostrzy, potem zrób zdjęcie');
   fi.click();
 }
 
 function stopLiveScanner() {
+  if (qrFocusTimer) {
+    clearInterval(qrFocusTimer);
+    qrFocusTimer = 0;
+  }
   if (!html5Qr) return;
   let scanner = html5Qr;
   html5Qr = null;
@@ -1189,6 +1192,74 @@ function stopLiveScanner() {
   } else {
     try { scanner.clear(); } catch (e) {}
   }
+}
+
+function buildQrScanConfig() {
+  function qrbox(viewfinderWidth, viewfinderHeight) {
+    let m = Math.min(viewfinderWidth, viewfinderHeight);
+    let s = Math.max(200, Math.floor(m * 0.82));
+    return { width: s, height: s };
+  }
+  return {
+    fps: 15,
+    qrbox: qrbox,
+    disableFlip: false,
+    videoConstraints: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1920, min: 720 },
+      height: { ideal: 1080, min: 480 },
+      focusMode: { ideal: 'continuous' },
+      exposureMode: { ideal: 'continuous' },
+      advanced: [
+        { focusMode: 'continuous' },
+        { exposureMode: 'continuous' },
+        { whiteBalanceMode: 'continuous' }
+      ]
+    }
+  };
+}
+
+function refocusLiveCamera(showToast) {
+  let video = document.querySelector('#qr-live-reader video');
+  if (!video || !video.srcObject) return;
+  let track = video.srcObject.getVideoTracks()[0];
+  if (!track) return;
+  let caps = track.getCapabilities ? track.getCapabilities() : {};
+  let modes = caps.focusMode || [];
+  let p;
+  if (modes.indexOf('continuous') >= 0) {
+    p = track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+  } else if (modes.indexOf('single-shot') >= 0) {
+    p = track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
+  } else if (modes.indexOf('auto') >= 0) {
+    p = track.applyConstraints({ focusMode: 'auto' });
+  }
+  if (p && showToast) {
+    p.then(function() {
+      showEmpToast('Ustawiam ostrość…');
+    }).catch(function() {});
+  } else if (p) {
+    p.catch(function() {});
+  }
+}
+
+function enhanceLiveCameraFocus() {
+  let video = document.querySelector('#qr-live-reader video');
+  if (!video || video.dataset.focusReady === '1') return;
+  video.dataset.focusReady = '1';
+  video.setAttribute('playsinline', 'true');
+  video.setAttribute('webkit-playsinline', 'true');
+  video.title = 'Dotknij, aby wyostrzyć';
+
+  refocusLiveCamera(false);
+  if (qrFocusTimer) clearInterval(qrFocusTimer);
+  qrFocusTimer = setInterval(function() {
+    if (html5Qr && html5Qr.isScanning) refocusLiveCamera(false);
+  }, 2800);
+
+  video.addEventListener('click', function() {
+    refocusLiveCamera(true);
+  });
 }
 
 function startLiveScanner() {
@@ -1214,17 +1285,16 @@ function startLiveScanner() {
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
       html5Qr = new Html5Qrcode('qr-live-reader', { verbose: false });
-
-      function qrbox(viewfinderWidth, viewfinderHeight) {
-        let m = Math.min(viewfinderWidth, viewfinderHeight);
-        let s = Math.max(200, Math.floor(m * 0.82));
-        return { width: s, height: s };
-      }
-
-      let config = { fps: 12, qrbox: qrbox, aspectRatio: 1.333 };
+      let config = buildQrScanConfig();
 
       function onScan(text) {
         handleQrDecoded(text);
+      }
+
+      function onLiveReady() {
+        qrLiveStarting = false;
+        setQrHint('Trzymaj kod w ramce · dotknij ekranu aby wyostrzyć');
+        setTimeout(enhanceLiveCameraFocus, 400);
       }
 
       html5Qr.start(
@@ -1232,32 +1302,41 @@ function startLiveScanner() {
         config,
         onScan,
         function() {}
-      ).then(function() {
-        qrLiveStarting = false;
-        setQrHint('Trzymaj kod w kwadracie');
-      }).catch(function(err) {
-        console.warn('Kamera tylna:', err);
+      ).then(onLiveReady).catch(function(err) {
+        console.warn('Kamera z autofokusem:', err);
         if (!html5Qr) { qrLiveStarting = false; return; }
-        return html5Qr.start(
-          { facingMode: 'user' },
-          config,
-          onScan,
-          function() {}
-        );
+        let simple = { fps: 15, qrbox: config.qrbox, videoConstraints: { facingMode: 'environment' } };
+        return html5Qr.start({ facingMode: 'environment' }, simple, onScan, function() {});
+      }).then(function() {
+        if (html5Qr && html5Qr.isScanning) onLiveReady();
+      }).catch(function(err) {
+        console.warn('Kamera prosta:', err);
+        if (!html5Qr) { qrLiveStarting = false; return; }
+        return html5Qr.start({ facingMode: 'user' }, { fps: 15, qrbox: config.qrbox }, onScan, function() {});
       }).then(function() {
         if (html5Qr && html5Qr.isScanning) {
-          qrLiveStarting = false;
-          setQrHint('Skanuj kod w kwadracie');
+          onLiveReady();
+          setQrHint('Przednia kamera — dotknij ekranu aby wyostrzyć');
         }
       }).catch(function(err) {
         qrLiveStarting = false;
         console.error('Kamera na żywo:', err);
-        setQrHint('Kamera na żywo niedostępna — użyj zielonego przycisku');
+        setQrHint('Użyj przycisku „Zdjęcie” poniżej');
         showEmpToast(cameraErrorMessage(err));
         if (liveWrap) liveWrap.classList.remove('show');
       });
     });
   });
+}
+
+function tryDecodeQrCanvas(ctx, size) {
+  let data = ctx.getImageData(0, 0, size, size);
+  let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
+  if (code && code.data) {
+    handleQrDecoded(code.data);
+    return true;
+  }
+  return false;
 }
 
 function scanQrFromImageSource(img) {
@@ -1271,21 +1350,18 @@ function scanQrFromImageSource(img) {
   let h = img.naturalHeight || img.height;
   if (!w || !h) return false;
 
-  let size = Math.min(Math.max(w, h), 1200);
-  canvas.width = size;
-  canvas.height = size;
-  let scale = size / Math.max(w, h);
-  let dw = Math.round(w * scale);
-  let dh = Math.round(h * scale);
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, size, size);
-  ctx.drawImage(img, Math.floor((size - dw) / 2), Math.floor((size - dh) / 2), dw, dh);
-
-  let data = ctx.getImageData(0, 0, size, size);
-  let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
-  if (code && code.data) {
-    handleQrDecoded(code.data);
-    return true;
+  let sizes = [1400, 1000, 700];
+  for (let i = 0; i < sizes.length; i++) {
+    let size = sizes[i];
+    let scale = size / Math.max(w, h);
+    let dw = Math.round(w * scale);
+    let dh = Math.round(h * scale);
+    canvas.width = size;
+    canvas.height = size;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(img, Math.floor((size - dw) / 2), Math.floor((size - dh) / 2), dw, dh);
+    if (tryDecodeQrCanvas(ctx, size)) return true;
   }
   return false;
 }
