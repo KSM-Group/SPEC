@@ -400,10 +400,78 @@ body {
 .stat-row:last-child { border-bottom: none; }
 .stat-label { font-size: 13px; color: var(--text2); }
 .stat-value { font-size: 14px; font-weight: 700; color: var(--text); }
-</style>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
+/* ── QR SCANNER (Nimiq qr-scanner) ── */
+#qr-reader-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #000;
+}
+#qr-reader-overlay.open { display: flex; }
+.qr-scan-header {
+  flex-shrink: 0;
+  padding: calc(12px + var(--safe-top)) 16px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0,0,0,.92);
+}
+.qr-scan-header button {
+  background: rgba(255,255,255,.15);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.qr-scan-header .qr-scan-title {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+.qr-scan-header .qr-torch-btn {
+  padding: 9px 12px;
+  font-size: 18px;
+  line-height: 1;
+}
+.qr-scan-header .qr-torch-btn.hidden { display: none; }
+.qr-scan-viewport {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  background: #000;
+}
+#qr-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.qr-scan-hint {
+  flex-shrink: 0;
+  padding: 12px 20px calc(16px + var(--safe-bottom));
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255,255,255,.65);
+  background: rgba(0,0,0,.85);
+}
 </style>
+<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script>
+  if (typeof QrScanner !== 'undefined') {
+    QrScanner.WORKER_PATH = 'https://unpkg.com/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+  }
+</script>
 </head>
 <body>
 
@@ -548,15 +616,17 @@ body {
 
 
 
-<div id="qr-reader-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:999;flex-direction:column;height:100vh;overflow:hidden;">
-  <div style="padding:14px 20px;display:flex;align-items:center;background:rgba(0,0,0,.9);">
-    <button onclick="closeCam()" style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:9px 16px;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;">✕ Zamknij</button>
-    <div style="flex:1;text-align:center;font-size:14px;font-weight:600;color:#fff;">Skieruj na kod QR</div>
+<div id="qr-reader-overlay" aria-hidden="true">
+  <div class="qr-scan-header">
+    <button type="button" onclick="closeCam()">✕ Zamknij</button>
+    <div class="qr-scan-title">Skieruj aparat na kod QR</div>
+    <button type="button" class="qr-torch-btn hidden" id="qr-torch-btn" onclick="toggleQrTorch()" title="Latarka">🔦</button>
   </div>
-  <div id="qr-reader" style="flex:1;width:100%;max-width:100%;overflow:hidden;"></div>
+  <div class="qr-scan-viewport">
+    <video id="qr-video" playsinline muted></video>
+  </div>
+  <div class="qr-scan-hint">Trzymaj telefon stabilnie · kod z panelu przy wejściu</div>
 </div>
-
-<canvas id="qr-canvas" style="display:none;"></canvas>
 
 <!-- DELEGATION MODAL -->
 <div class="modal-overlay" id="delegation-modal" onclick="closeDelegationOutside(event)">
@@ -1000,84 +1070,163 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
 }
 
-// ── Camera QR Scanner ─────────────────────────────────────────
+// ── Camera QR Scanner (Nimiq qr-scanner — BarcodeDetector + worker) ──
+let qrScanner = null;
+let qrScanHandled = false;
+let qrOpening = false;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-let html5QrScanner = null;
-
-function openCamera() {
-  let overlay = document.getElementById('qr-reader-overlay');
-  overlay.style.display = 'flex';
-  overlay.style.flexDirection = 'column';
-
-  html5QrScanner = new Html5Qrcode("qr-reader");
-  let w = window.innerWidth;
-  let h = window.innerHeight;
-  html5QrScanner.start(
-    { facingMode: "environment" },
-    {
-      fps: 10,
-      qrbox: { width: Math.min(w * 0.7, 280), height: Math.min(w * 0.7, 280) },
-      aspectRatio: h / w,
-      videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-    },
-    (decodedText) => {
-      onQRFound(decodedText);
-      setTimeout(() => closeCam(), 300);
-    },
-    (errorMessage) => { /* scanning... */ }
-  ).catch(err => {
-    console.error('Camera error:', err);
-  });
-}
-
-function closeCam() {
-  if (html5QrScanner) {
-    html5QrScanner.stop().then(() => {
-      html5QrScanner.clear();
-      html5QrScanner = null;
-    }).catch(() => {});
+async function openCamera() {
+  if (qrOpening) return;
+  if (typeof QrScanner === 'undefined') {
+    showEmpToast('Skaner niedostępny — odśwież stronę');
+    return;
   }
+
+  qrOpening = true;
+  await closeCam();
+
   let overlay = document.getElementById('qr-reader-overlay');
-  if (overlay) overlay.style.display = 'none';
+  let video = document.getElementById('qr-video');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  qrScanHandled = false;
+
+  let hasCam = await QrScanner.hasCamera();
+  if (!hasCam) {
+    showEmpToast('Brak kamery lub brak uprawnień');
+    await closeCam();
+    qrOpening = false;
+    return;
+  }
+
+  qrScanner = new QrScanner(
+    video,
+    (text) => handleQrDecoded(text),
+    {
+      preferredCamera: 'environment',
+      maxScansPerSecond: 20,
+      highlightScanRegion: true,
+      highlightCodeOutline: true,
+      calculateScanRegion: (v) => {
+        let min = Math.min(v.videoWidth, v.videoHeight);
+        let side = Math.round(min * 0.72);
+        return {
+          x: Math.round((v.videoWidth - side) / 2),
+          y: Math.round((v.videoHeight - side) / 2),
+          width: side,
+          height: side,
+          downScaledWidth: Math.min(400, side),
+          downScaledHeight: Math.min(400, side)
+        };
+      },
+      onDecodeError: () => {}
+    }
+  );
+
+  try {
+    await qrScanner.start();
+    let torchBtn = document.getElementById('qr-torch-btn');
+    if (torchBtn) {
+      let canFlash = await QrScanner.hasFlash();
+      torchBtn.classList.toggle('hidden', !canFlash);
+    }
+  } catch (err) {
+    console.error('Camera error:', err);
+    showEmpToast(cameraErrorMessage(err));
+    await closeCam();
+  } finally {
+    qrOpening = false;
+  }
 }
 
-function onQRFound(url) {
+function cameraErrorMessage(err) {
+  let name = err && err.name ? err.name : '';
+  if (name === 'NotAllowedError') return 'Zezwól na dostęp do kamery w ustawieniach';
+  if (name === 'NotFoundError') return 'Nie znaleziono kamery';
+  if (name === 'NotReadableError') return 'Kamera zajęta przez inną aplikację';
+  return 'Nie udało się uruchomić kamery';
+}
+
+async function closeCam() {
+  qrScanHandled = false;
+  let torchBtn = document.getElementById('qr-torch-btn');
+  if (torchBtn) torchBtn.classList.add('hidden');
+
+  if (qrScanner) {
+    try {
+      if (qrScanner.isFlashOn()) await qrScanner.turnFlashOff();
+      qrScanner.stop();
+      qrScanner.destroy();
+    } catch (e) { /* ignore */ }
+    qrScanner = null;
+  }
+
+  let overlay = document.getElementById('qr-reader-overlay');
+  if (overlay) {
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+}
+
+async function toggleQrTorch() {
+  if (!qrScanner) return;
   try {
-    let u = new URL(url);
+    await qrScanner.toggleFlash();
+  } catch (e) {
+    showEmpToast('Latarka niedostępna');
+  }
+}
+
+function handleQrDecoded(text) {
+  if (qrScanHandled) return;
+  let payload = parseQrPayload(text);
+  if (!payload) return;
+
+  qrScanHandled = true;
+  if (navigator.vibrate) navigator.vibrate(40);
+  onQRFound(payload);
+  setTimeout(() => closeCam(), 200);
+}
+
+function parseQrPayload(text) {
+  if (!text || typeof text !== 'string') return null;
+  let raw = text.trim();
+  if (!raw) return null;
+
+  try {
+    let u = new URL(raw, window.location.href);
     let action = u.searchParams.get('action');
     let token = u.searchParams.get('token');
-    if (action && token) {
-      let last = sessionStorage.getItem('last-qr-token');
-      if (token !== last) {
-        sessionStorage.setItem('last-qr-token', token);
-        registerAction(action, true);
-      } else {
-        showEmpToast('Ten kod QR byl juz uzyty');
-      }
-    }
-  } catch(e) { showEmpToast('Nieprawidlowy kod QR'); }
+    let client = u.searchParams.get('client');
+    if (action && token) return { action, token, client };
+  } catch (e) { /* not a URL */ }
+
+  return null;
+}
+
+function onQRFound(payload) {
+  let action = typeof payload === 'string' ? null : payload.action;
+  let token = typeof payload === 'string' ? null : payload.token;
+  let client = typeof payload === 'object' && payload ? payload.client : null;
+
+  if (!action || !token) {
+    showEmpToast('Nieprawidłowy kod QR');
+    return;
+  }
+
+  if (client) {
+    SECP_CLIENT_ID = client;
+    localStorage.setItem('secp-client-id', client);
+  }
+
+  let last = sessionStorage.getItem('last-qr-token');
+  if (token === last) {
+    showEmpToast('Ten kod QR był już użyty');
+    return;
+  }
+
+  sessionStorage.setItem('last-qr-token', token);
+  registerAction(action, true);
 }
 
 function showEmpToast(msg) {
@@ -1096,13 +1245,6 @@ document.documentElement.style.overscrollBehavior = 'none';
 <div style="text-align:center;padding:16px;font-size:11px;color:var(--text3,#9ca3af);border-top:1px solid var(--border,#e5e7eb);margin-top:auto;">
   Powered by <strong style="color:var(--accent,#1a56db)">SPEC</strong> · KSM-Group · Autor: Michał Kucia
 </div>
-
-<style>
-
-</style>
-<script>
-
-</script>
 
 </body>
 </html>
