@@ -851,13 +851,13 @@ function showPage(name) {
   if (name === 'lista') {
     let fr = document.getElementById('iframe-lista');
     if (fr.src === 'about:blank' || fr.src === window.location.href) {
-      fr.src = 'https://ksm-group.github.io/lista-obecnosci/index.html' + param;
+      fr.src = 'https://ksm-group.github.io/lista-obecnosci/index.html' + param + '&v=' + Date.now();
     }
   }
   if (name === 'dash') {
     let fr = document.getElementById('iframe-dash');
     if (fr.src === 'about:blank' || fr.src === window.location.href) {
-      fr.src = 'https://ksm-group.github.io/lista-obecnosci/dashboard.html' + param;
+      fr.src = 'https://ksm-group.github.io/lista-obecnosci/dashboard.html' + param + '&v=' + Date.now();
     }
   }
 }
