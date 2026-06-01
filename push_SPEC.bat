@@ -1,6 +1,6 @@
 @echo off
 echo === SPEC - Push do GitHub ===
-cd /d "C:\Users\Michał\Desktop\Projekt SPEC\SPEC\"
+cd /d "%~dp0"
 git add .
 git commit -m "SPEC update %date% %time%"
 git push origin master:main --force
