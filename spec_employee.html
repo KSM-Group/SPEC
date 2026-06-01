@@ -401,7 +401,7 @@ body {
 .stat-label { font-size: 13px; color: var(--text2); }
 .stat-value { font-size: 14px; font-weight: 700; color: var(--text); }
 
-/* ── QR SCANNER (getUserMedia + BarcodeDetector / jsQR) ── */
+/* ── QR SCANNER (tylko na żywo: getUserMedia + jsQR) ── */
 #qr-reader-overlay {
   display: none;
   position: fixed;
@@ -447,15 +447,15 @@ body {
   overflow: hidden;
 }
 #qr-canvas { display: none; }
-#qr-live-wrap { display: none; flex: 1; min-height: 0; flex-direction: column; }
-#qr-live-wrap.show { display: flex; }
-#qr-live-reader { width: 100%; height: 100%; min-height: 200px; }
-#qr-live-reader video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
+#qr-live-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#qr-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  cursor: pointer;
 }
-#qr-live-reader img { display: none !important; }
 .qr-scan-frame {
   position: absolute;
   left: 50%;
@@ -482,51 +482,28 @@ body {
 }
 .qr-scan-hint {
   flex-shrink: 0;
-  padding: 12px 16px 8px;
+  padding: 12px 16px calc(14px + var(--safe-bottom));
   text-align: center;
   font-size: 12px;
   color: rgba(255,255,255,.75);
   background: rgba(0,0,0,.85);
   line-height: 1.45;
 }
-.qr-scan-actions {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 16px calc(14px + var(--safe-bottom));
-  background: rgba(0,0,0,.85);
-}
-.qr-scan-actions button,
-.qr-scan-actions label {
-  display: block;
-  width: 100%;
-  text-align: center;
-  border-radius: 10px;
-  padding: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-}
-#qr-live-btn {
-  background: var(--green);
-  color: #fff;
+.qr-torch-btn {
+  background: rgba(255,255,255,.15);
   border: none;
-  font-size: 15px;
-  box-shadow: 0 4px 14px rgba(16,185,129,.35);
-}
-#qr-photo-btn {
-  background: rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 9px 12px;
   color: #fff;
-  border: 1px solid rgba(255,255,255,.25);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
 }
-#qr-live-reader video { cursor: pointer; }
-#qr-file-input { display: none; }
+.qr-torch-btn.hidden { display: none; }
 </style>
 <meta http-equiv="Permissions-Policy" content="camera=(self)"/>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
@@ -674,21 +651,17 @@ body {
 <div id="qr-reader-overlay" aria-hidden="true">
   <div class="qr-scan-header">
     <button type="button" onclick="closeCam()">✕ Zamknij</button>
-    <div class="qr-scan-title">Skanowanie QR</div>
+    <div class="qr-scan-title">Skanuj kod QR</div>
+    <button type="button" class="qr-torch-btn hidden" id="qr-torch-btn" onclick="toggleQrTorch()" title="Latarka">🔦</button>
   </div>
   <div id="qr-live-wrap">
     <div class="qr-scan-viewport">
-      <div id="qr-live-reader"></div>
+      <video id="qr-video" autoplay playsinline muted webkit-playsinline></video>
+      <canvas id="qr-canvas"></canvas>
       <div class="qr-scan-frame" aria-hidden="true"></div>
     </div>
   </div>
-  <canvas id="qr-canvas"></canvas>
-  <div class="qr-scan-hint" id="qr-scan-hint">Wybierz sposób skanowania poniżej</div>
-  <div class="qr-scan-actions">
-    <button type="button" id="qr-live-btn" onclick="startLiveScanner()">▶ Skaner na żywo</button>
-    <button type="button" id="qr-photo-btn" onclick="openQrPhotoCapture()">📷 Zdjęcie (gdy rozmyte)</button>
-    <input type="file" id="qr-file-input" accept="image/*" capture="environment"/>
-  </div>
+  <div class="qr-scan-hint" id="qr-scan-hint">Włączanie kamery…</div>
 </div>
 
 <!-- DELEGATION MODAL -->
@@ -1133,11 +1106,17 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
 }
 
-// ── QR Scanner ────────────────────────────────────────────────
-let html5Qr = null;
+// ── QR Scanner — tylko na żywo (własna kamera + jsQR) ─────────
+let qrStream = null;
+let qrScanRaf = 0;
 let qrScanHandled = false;
 let qrLiveStarting = false;
 let qrFocusTimer = 0;
+let qrLastScanTs = 0;
+let qrBarcodeDetector = null;
+let qrTorchOn = false;
+const QR_SCAN_MS = 50;
+const QR_DECODE_PX = 640;
 
 function setQrHint(text) {
   let el = document.getElementById('qr-scan-hint');
@@ -1148,241 +1127,297 @@ function isHttpsOk() {
   return window.isSecureContext === true;
 }
 
-function openQrScanner() {
-  if (!isHttpsOk()) {
-    showEmpToast('Otwórz stronę przez HTTPS (GitHub Pages), nie plik z dysku');
-    return;
+function requestUserMedia(constraints) {
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    return navigator.mediaDevices.getUserMedia(constraints);
   }
-  qrScanHandled = false;
-  stopLiveScanner();
-  let liveWrap = document.getElementById('qr-live-wrap');
-  if (liveWrap) liveWrap.classList.remove('show');
-  let reader = document.getElementById('qr-live-reader');
-  if (reader) reader.innerHTML = '';
-
-  let overlay = document.getElementById('qr-reader-overlay');
-  overlay.classList.add('open');
-  overlay.setAttribute('aria-hidden', 'false');
-  startLiveScanner();
+  let legacy = navigator.getUserMedia || navigator.webkitGetUserMedia;
+  if (!legacy) return Promise.reject(new Error('Brak API kamery'));
+  return new Promise(function(resolve, reject) {
+    legacy.call(navigator, constraints, resolve, reject);
+  });
 }
 
-function openQrPhotoCapture() {
-  if (!isHttpsOk()) {
-    showEmpToast('Wymagane HTTPS');
-    return;
-  }
-  let fi = document.getElementById('qr-file-input');
-  if (!fi) return;
-  setQrHint('Poczekaj aż aparat sam wyostrzy, potem zrób zdjęcie');
-  fi.click();
-}
-
-function stopLiveScanner() {
-  if (qrFocusTimer) {
-    clearInterval(qrFocusTimer);
-    qrFocusTimer = 0;
-  }
-  if (!html5Qr) return;
-  let scanner = html5Qr;
-  html5Qr = null;
-  if (scanner.isScanning) {
-    scanner.stop().then(function() {
-      scanner.clear().catch(function() {});
-    }).catch(function() {});
-  } else {
-    try { scanner.clear(); } catch (e) {}
-  }
-}
-
-function buildQrScanConfig() {
-  function qrbox(viewfinderWidth, viewfinderHeight) {
-    let m = Math.min(viewfinderWidth, viewfinderHeight);
-    let s = Math.max(200, Math.floor(m * 0.82));
-    return { width: s, height: s };
-  }
-  return {
-    fps: 15,
-    qrbox: qrbox,
-    disableFlip: false,
-    videoConstraints: {
-      facingMode: { ideal: 'environment' },
-      width: { ideal: 1920, min: 720 },
-      height: { ideal: 1080, min: 480 },
-      focusMode: { ideal: 'continuous' },
-      exposureMode: { ideal: 'continuous' },
-      advanced: [
-        { focusMode: 'continuous' },
-        { exposureMode: 'continuous' },
-        { whiteBalanceMode: 'continuous' }
-      ]
-    }
+function buildCameraConstraints(deviceId) {
+  let video = {
+    width: { ideal: 1920, min: 640 },
+    height: { ideal: 1080, min: 480 },
+    focusMode: { ideal: 'continuous' },
+    exposureMode: { ideal: 'continuous' },
+    whiteBalanceMode: { ideal: 'continuous' }
   };
+  if (deviceId) video.deviceId = { exact: deviceId };
+  else video.facingMode = { ideal: 'environment' };
+  return { audio: false, video: video };
+}
+
+function pickBackCameraId() {
+  return navigator.mediaDevices.enumerateDevices().then(function(devices) {
+    let cams = devices.filter(function(d) { return d.kind === 'videoinput'; });
+    if (!cams.length) return null;
+    let back = cams.find(function(c) {
+      let l = (c.label || '').toLowerCase();
+      return /back|rear|tyl|environment|facing back/.test(l);
+    });
+    if (back) return back.deviceId;
+    return cams.length > 1 ? cams[cams.length - 1].deviceId : cams[0].deviceId;
+  }).catch(function() { return null; });
+}
+
+function getQrVideoTrack() {
+  if (qrStream) {
+    let t = qrStream.getVideoTracks();
+    if (t.length) return t[0];
+  }
+  let video = document.getElementById('qr-video');
+  if (video && video.srcObject) {
+    let t2 = video.srcObject.getVideoTracks();
+    if (t2.length) return t2[0];
+  }
+  return null;
 }
 
 function refocusLiveCamera(showToast) {
-  let video = document.querySelector('#qr-live-reader video');
-  if (!video || !video.srcObject) return;
-  let track = video.srcObject.getVideoTracks()[0];
+  let track = getQrVideoTrack();
   if (!track) return;
   let caps = track.getCapabilities ? track.getCapabilities() : {};
   let modes = caps.focusMode || [];
-  let p;
-  if (modes.indexOf('continuous') >= 0) {
-    p = track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
-  } else if (modes.indexOf('single-shot') >= 0) {
-    p = track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
-  } else if (modes.indexOf('auto') >= 0) {
-    p = track.applyConstraints({ focusMode: 'auto' });
+  let chain = Promise.resolve();
+
+  if (modes.indexOf('single-shot') >= 0) {
+    chain = track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
+      .catch(function() {});
   }
-  if (p && showToast) {
-    p.then(function() {
+  chain = chain.then(function() {
+    if (modes.indexOf('continuous') >= 0) {
+      return track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+    }
+    if (modes.indexOf('auto') >= 0) {
+      return track.applyConstraints({ focusMode: 'auto' });
+    }
+  });
+  if (caps.zoom && typeof caps.zoom.min === 'number') {
+    let z = Math.min(caps.zoom.max, Math.max(caps.zoom.min, (caps.zoom.min + caps.zoom.max) * 0.35));
+    chain = chain.then(function() {
+      return track.applyConstraints({ advanced: [{ zoom: z }] }).catch(function() {});
+    });
+  }
+  if (showToast) {
+    chain.then(function() {
       showEmpToast('Ustawiam ostrość…');
     }).catch(function() {});
-  } else if (p) {
-    p.catch(function() {});
+  } else {
+    chain.catch(function() {});
   }
 }
 
+function updateTorchButton() {
+  let btn = document.getElementById('qr-torch-btn');
+  let track = getQrVideoTrack();
+  if (!btn || !track) return;
+  let caps = track.getCapabilities ? track.getCapabilities() : {};
+  btn.classList.toggle('hidden', !caps.torch);
+}
+
+function toggleQrTorch() {
+  let track = getQrVideoTrack();
+  if (!track) return;
+  let caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (!caps.torch) return;
+  qrTorchOn = !qrTorchOn;
+  track.applyConstraints({ advanced: [{ torch: qrTorchOn }] }).catch(function() {
+    qrTorchOn = false;
+    showEmpToast('Latarka niedostępna');
+  });
+}
+
 function enhanceLiveCameraFocus() {
-  let video = document.querySelector('#qr-live-reader video');
+  let video = document.getElementById('qr-video');
   if (!video || video.dataset.focusReady === '1') return;
   video.dataset.focusReady = '1';
   video.setAttribute('playsinline', 'true');
   video.setAttribute('webkit-playsinline', 'true');
-  video.title = 'Dotknij, aby wyostrzyć';
 
   refocusLiveCamera(false);
+  updateTorchButton();
   if (qrFocusTimer) clearInterval(qrFocusTimer);
   qrFocusTimer = setInterval(function() {
-    if (html5Qr && html5Qr.isScanning) refocusLiveCamera(false);
-  }, 2800);
+    if (qrStream) refocusLiveCamera(false);
+  }, 2200);
 
-  video.addEventListener('click', function() {
+  video.onclick = function() {
     refocusLiveCamera(true);
-  });
+  };
+}
+
+function initQrBarcodeDetector() {
+  qrBarcodeDetector = null;
+  if (!('BarcodeDetector' in window)) return;
+  BarcodeDetector.getSupportedFormats().then(function(formats) {
+    if (formats && formats.indexOf('qr_code') >= 0) {
+      qrBarcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+    }
+  }).catch(function() {});
+}
+
+function attachQrStream(stream) {
+  let video = document.getElementById('qr-video');
+  qrStream = stream;
+  video.srcObject = stream;
+  video.muted = true;
+  video.playsInline = true;
+  let p = video.play();
+  if (p && p.catch) p.catch(function() {});
+  qrLiveStarting = false;
+  initQrBarcodeDetector();
+  enhanceLiveCameraFocus();
+  setQrHint('Kod w białej ramce · dotknij ekranu = ostrość');
+  runLiveQrLoop();
+}
+
+function stopLiveScanner() {
+  if (qrScanRaf) {
+    cancelAnimationFrame(qrScanRaf);
+    qrScanRaf = 0;
+  }
+  if (qrFocusTimer) {
+    clearInterval(qrFocusTimer);
+    qrFocusTimer = 0;
+  }
+  qrBarcodeDetector = null;
+  qrTorchOn = false;
+  let torchBtn = document.getElementById('qr-torch-btn');
+  if (torchBtn) torchBtn.classList.add('hidden');
+
+  let video = document.getElementById('qr-video');
+  if (video) {
+    video.onclick = null;
+    delete video.dataset.focusReady;
+    try { video.pause(); } catch (e) {}
+    video.srcObject = null;
+  }
+  if (qrStream) {
+    qrStream.getTracks().forEach(function(t) { t.stop(); });
+    qrStream = null;
+  }
 }
 
 function startLiveScanner() {
   if (qrLiveStarting) return;
   if (!isHttpsOk()) {
-    showEmpToast('Wymagane HTTPS');
+    showEmpToast('Wymagane HTTPS (GitHub Pages)');
     return;
   }
-  if (typeof Html5Qrcode === 'undefined') {
-    showEmpToast('Brak biblioteki skanera — odśwież stronę');
+  if (typeof jsQR === 'undefined') {
+    showEmpToast('Brak skanera — odśwież stronę (internet)');
     return;
   }
 
   qrLiveStarting = true;
   stopLiveScanner();
+  setQrHint('Włączanie kamery…');
 
-  let liveWrap = document.getElementById('qr-live-wrap');
-  let readerEl = document.getElementById('qr-live-reader');
-  liveWrap.classList.add('show');
-  readerEl.innerHTML = '';
-  setQrHint('Uruchamianie kamery na żywo…');
-
-  requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      html5Qr = new Html5Qrcode('qr-live-reader', { verbose: false });
-      let config = buildQrScanConfig();
-
-      function onScan(text) {
-        handleQrDecoded(text);
-      }
-
-      function onLiveReady() {
-        qrLiveStarting = false;
-        setQrHint('Trzymaj kod w ramce · dotknij ekranu aby wyostrzyć');
-        setTimeout(enhanceLiveCameraFocus, 400);
-      }
-
-      html5Qr.start(
-        { facingMode: 'environment' },
-        config,
-        onScan,
-        function() {}
-      ).then(onLiveReady).catch(function(err) {
-        console.warn('Kamera z autofokusem:', err);
-        if (!html5Qr) { qrLiveStarting = false; return; }
-        let simple = { fps: 15, qrbox: config.qrbox, videoConstraints: { facingMode: 'environment' } };
-        return html5Qr.start({ facingMode: 'environment' }, simple, onScan, function() {});
-      }).then(function() {
-        if (html5Qr && html5Qr.isScanning) onLiveReady();
-      }).catch(function(err) {
-        console.warn('Kamera prosta:', err);
-        if (!html5Qr) { qrLiveStarting = false; return; }
-        return html5Qr.start({ facingMode: 'user' }, { fps: 15, qrbox: config.qrbox }, onScan, function() {});
-      }).then(function() {
-        if (html5Qr && html5Qr.isScanning) {
-          onLiveReady();
-          setQrHint('Przednia kamera — dotknij ekranu aby wyostrzyć');
-        }
-      }).catch(function(err) {
-        qrLiveStarting = false;
-        console.error('Kamera na żywo:', err);
-        setQrHint('Użyj przycisku „Zdjęcie” poniżej');
-        showEmpToast(cameraErrorMessage(err));
-        if (liveWrap) liveWrap.classList.remove('show');
+  requestUserMedia({ audio: false, video: { facingMode: 'environment' } })
+    .then(function(stream) {
+      return pickBackCameraId().then(function(deviceId) {
+        if (!deviceId) return stream;
+        let cur = stream.getVideoTracks()[0];
+        let curId = cur && cur.getSettings ? cur.getSettings().deviceId : '';
+        if (curId === deviceId) return stream;
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        return requestUserMedia(buildCameraConstraints(deviceId));
       });
+    })
+    .then(attachQrStream)
+    .catch(function(err) {
+      console.warn('Kamera tylna:', err);
+      return requestUserMedia(buildCameraConstraints(null));
+    })
+    .then(function(stream) {
+      if (!qrStream && stream) attachQrStream(stream);
+    })
+    .catch(function(err) {
+      console.warn('Kamera domyślna:', err);
+      return requestUserMedia({ audio: false, video: true });
+    })
+    .then(function(stream) {
+      if (!qrStream && stream) attachQrStream(stream);
+    })
+    .catch(function(err) {
+      qrLiveStarting = false;
+      console.error('Kamera:', err);
+      showEmpToast(cameraErrorMessage(err));
+      setQrHint(cameraErrorMessage(err));
     });
-  });
 }
 
-function tryDecodeQrCanvas(ctx, size) {
-  let data = ctx.getImageData(0, 0, size, size);
-  let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
-  if (code && code.data) {
-    handleQrDecoded(code.data);
-    return true;
-  }
-  return false;
-}
+function liveQrTickJs() {
+  let video = document.getElementById('qr-video');
+  if (!video || !video.videoWidth || typeof jsQR === 'undefined') return;
 
-function scanQrFromImageSource(img) {
-  if (typeof jsQR === 'undefined') {
-    showEmpToast('Brak skanera — sprawdź internet i odśwież');
-    return false;
-  }
   let canvas = document.getElementById('qr-canvas');
   let ctx = canvas.getContext('2d', { willReadFrequently: true });
-  let w = img.naturalWidth || img.width;
-  let h = img.naturalHeight || img.height;
-  if (!w || !h) return false;
+  let vw = video.videoWidth;
+  let vh = video.videoHeight;
+  let crop = Math.floor(Math.min(vw, vh) * 0.9);
+  let sx = Math.floor((vw - crop) / 2);
+  let sy = Math.floor((vh - crop) / 2);
+  let size = QR_DECODE_PX;
 
-  let sizes = [1400, 1000, 700];
-  for (let i = 0; i < sizes.length; i++) {
-    let size = sizes[i];
-    let scale = size / Math.max(w, h);
-    let dw = Math.round(w * scale);
-    let dh = Math.round(h * scale);
-    canvas.width = size;
-    canvas.height = size;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, size, size);
-    ctx.drawImage(img, Math.floor((size - dw) / 2), Math.floor((size - dh) / 2), dw, dh);
-    if (tryDecodeQrCanvas(ctx, size)) return true;
-  }
-  return false;
+  canvas.width = size;
+  canvas.height = size;
+  ctx.drawImage(video, sx, sy, crop, crop, 0, 0, size, size);
+
+  let data = ctx.getImageData(0, 0, size, size);
+  let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
+  if (code && code.data) handleQrDecoded(code.data);
 }
 
-function scanQrFromFile(file) {
-  if (!file) return;
-  let url = URL.createObjectURL(file);
-  let img = new Image();
-  img.onload = function() {
-    if (!scanQrFromImageSource(img)) {
-      showEmpToast('Nie widać kodu QR — zbliż się i sfotografuj ponownie');
-    } else {
-      closeCam();
-    }
-    URL.revokeObjectURL(url);
-  };
-  img.onerror = function() {
-    showEmpToast('Nie można odczytać zdjęcia');
-    URL.revokeObjectURL(url);
-  };
-  img.src = url;
+function liveQrTick() {
+  if (qrScanHandled || !qrStream) return;
+
+  let video = document.getElementById('qr-video');
+  if (!video || !video.videoWidth) return;
+
+  if (qrBarcodeDetector) {
+    qrBarcodeDetector.detect(video).then(function(codes) {
+      if (codes && codes.length && codes[0].rawValue) {
+        handleQrDecoded(codes[0].rawValue);
+      }
+    }).catch(function() {
+      liveQrTickJs();
+    });
+    return;
+  }
+  liveQrTickJs();
+}
+
+function runLiveQrLoop() {
+  if (!qrStream || qrScanHandled) return;
+  let now = performance.now();
+  if (now - qrLastScanTs >= QR_SCAN_MS) {
+    qrLastScanTs = now;
+    liveQrTick();
+  }
+  qrScanRaf = requestAnimationFrame(runLiveQrLoop);
+}
+
+function openQrScanner() {
+  if (!isHttpsOk()) {
+    showEmpToast('Otwórz przez HTTPS, nie plik z dysku');
+    return;
+  }
+  qrScanHandled = false;
+  stopLiveScanner();
+
+  let overlay = document.getElementById('qr-reader-overlay');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  void overlay.offsetHeight;
+
+  requestAnimationFrame(function() {
+    requestAnimationFrame(startLiveScanner);
+  });
 }
 
 function cameraErrorMessage(err) {
@@ -1401,24 +1436,12 @@ function closeCam() {
   qrScanHandled = false;
   qrLiveStarting = false;
   stopLiveScanner();
-  let liveWrap = document.getElementById('qr-live-wrap');
-  if (liveWrap) liveWrap.classList.remove('show');
   let overlay = document.getElementById('qr-reader-overlay');
   if (overlay) {
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
   }
 }
-
-(function() {
-  let fi = document.getElementById('qr-file-input');
-  if (!fi) return;
-  fi.addEventListener('change', function(e) {
-    let file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (file) scanQrFromFile(file);
-  });
-})();
 
 function handleQrDecoded(text) {
   if (qrScanHandled) return;
