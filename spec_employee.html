@@ -401,7 +401,7 @@ body {
 .stat-label { font-size: 13px; color: var(--text2); }
 .stat-value { font-size: 14px; font-weight: 700; color: var(--text); }
 
-/* ── QR SCANNER (Nimiq qr-scanner) ── */
+/* ── QR SCANNER (getUserMedia + BarcodeDetector / jsQR) ── */
 #qr-reader-overlay {
   display: none;
   position: fixed;
@@ -439,12 +439,6 @@ body {
   font-weight: 600;
   color: #fff;
 }
-.qr-scan-header .qr-torch-btn {
-  padding: 9px 12px;
-  font-size: 18px;
-  line-height: 1;
-}
-.qr-scan-header .qr-torch-btn.hidden { display: none; }
 .qr-scan-viewport {
   flex: 1;
   position: relative;
@@ -452,25 +446,85 @@ body {
   background: #000;
   overflow: hidden;
 }
-#qr-reader {
-  width: 100%;
-  height: 100%;
-}
-#qr-reader video {
+#qr-canvas { display: none; }
+#qr-live-wrap { display: none; flex: 1; min-height: 0; flex-direction: column; }
+#qr-live-wrap.show { display: flex; }
+#qr-live-reader { width: 100%; height: 100%; min-height: 200px; }
+#qr-live-reader video {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
 }
-#qr-reader img[alt="Info icon"] { display: none !important; }
+#qr-live-reader img { display: none !important; }
+.qr-scan-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(78vw, 78vh, 320px);
+  height: min(78vw, 78vh, 320px);
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255,255,255,.85);
+  border-radius: 16px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
+  pointer-events: none;
+}
+.qr-scan-frame::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  border: 2px solid var(--accent2);
+  animation: qr-pulse 1.6s ease-in-out infinite;
+}
+@keyframes qr-pulse {
+  0%, 100% { opacity: .35; }
+  50% { opacity: 1; }
+}
 .qr-scan-hint {
   flex-shrink: 0;
-  padding: 12px 20px calc(16px + var(--safe-bottom));
+  padding: 12px 16px 8px;
   text-align: center;
   font-size: 12px;
-  color: rgba(255,255,255,.65);
+  color: rgba(255,255,255,.75);
+  background: rgba(0,0,0,.85);
+  line-height: 1.45;
+}
+.qr-scan-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px calc(14px + var(--safe-bottom));
   background: rgba(0,0,0,.85);
 }
+.qr-scan-actions button,
+.qr-scan-actions label {
+  display: block;
+  width: 100%;
+  text-align: center;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+#qr-photo-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  font-size: 15px;
+  box-shadow: 0 4px 14px rgba(16,185,129,.35);
+}
+#qr-live-btn {
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.25);
+}
+#qr-file-input { display: none; }
 </style>
+<meta http-equiv="Permissions-Policy" content="camera=(self)"/>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
@@ -567,7 +621,7 @@ body {
     <div class="nav-item" onclick="showScreen('stats')">
       <span class="nav-icon">📊</span>Statystyki
     </div>
-    <div class="nav-item" onclick="openCamera()">
+    <div class="nav-item" onclick="openQrScanner()">
       <span class="nav-icon">📷</span>Skanuj QR
     </div>
     <div class="nav-item" onclick="doLogout()">
@@ -608,7 +662,7 @@ body {
   <div class="bottom-nav">
     <div class="nav-item" onclick="showScreen('main')"><span class="nav-icon">🏠</span>Główna</div>
     <div class="nav-item active" onclick="showScreen('stats')"><span class="nav-icon">📊</span>Statystyki</div>
-    <div class="nav-item" onclick="openCamera()"><span class="nav-icon">📷</span>Skanuj QR</div>
+    <div class="nav-item" onclick="openQrScanner()"><span class="nav-icon">📷</span>Skanuj QR</div>
     <div class="nav-item" onclick="doLogout()"><span class="nav-icon">👤</span>Wyloguj</div>
     
   </div>
@@ -619,10 +673,21 @@ body {
 <div id="qr-reader-overlay" aria-hidden="true">
   <div class="qr-scan-header">
     <button type="button" onclick="closeCam()">✕ Zamknij</button>
-    <div class="qr-scan-title">Skieruj aparat na kod QR</div>
+    <div class="qr-scan-title">Skanowanie QR</div>
   </div>
-  <div class="qr-scan-viewport" id="qr-reader"></div>
-  <div class="qr-scan-hint">Trzymaj telefon stabilnie · kod z panelu przy wejściu</div>
+  <div id="qr-live-wrap">
+    <div class="qr-scan-viewport">
+      <div id="qr-live-reader"></div>
+      <div class="qr-scan-frame" aria-hidden="true"></div>
+    </div>
+  </div>
+  <canvas id="qr-canvas"></canvas>
+  <div class="qr-scan-hint" id="qr-scan-hint">Wybierz sposób skanowania poniżej</div>
+  <div class="qr-scan-actions">
+    <button type="button" id="qr-photo-btn" onclick="openQrPhotoCapture()">📷 Skanuj aparatem telefonu</button>
+    <button type="button" id="qr-live-btn" onclick="startLiveScanner()">▶ Skaner na żywo (opcjonalnie)</button>
+    <input type="file" id="qr-file-input" accept="image/*" capture="environment"/>
+  </div>
 </div>
 
 <!-- DELEGATION MODAL -->
@@ -1067,103 +1132,181 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
 }
 
-// ── Camera QR Scanner ─────────────────────────────────────────
-// WAŻNE: bez await przed start() — inaczej iOS traci „gest użytkownika” i kamera się nie włącza.
+// ── QR Scanner ────────────────────────────────────────────────
+// Główna ścieżka: aparat systemowy (zdjęcie) — działa bez getUserMedia w PWA.
+// Opcjonalnie: skan na żywo (html5-qrcode).
 let html5Qr = null;
 let qrScanHandled = false;
-let qrOpening = false;
+let qrLiveStarting = false;
 
-function openCamera() {
-  if (qrOpening) return;
+function setQrHint(text) {
+  let el = document.getElementById('qr-scan-hint');
+  if (el) el.textContent = text;
+}
 
-  if (!window.isSecureContext) {
-    showEmpToast('Kamera działa tylko przez HTTPS (np. GitHub Pages)');
+function isHttpsOk() {
+  return window.isSecureContext === true;
+}
+
+function openQrScanner() {
+  if (!isHttpsOk()) {
+    showEmpToast('Otwórz stronę przez HTTPS (GitHub Pages), nie plik z dysku');
+    return;
+  }
+  qrScanHandled = false;
+  stopLiveScanner();
+  let liveWrap = document.getElementById('qr-live-wrap');
+  if (liveWrap) liveWrap.classList.remove('show');
+  let reader = document.getElementById('qr-live-reader');
+  if (reader) reader.innerHTML = '';
+
+  let overlay = document.getElementById('qr-reader-overlay');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  setQrHint('Otwieram aparat telefonu…');
+  openQrPhotoCapture();
+}
+
+function openQrPhotoCapture() {
+  if (!isHttpsOk()) {
+    showEmpToast('Wymagane HTTPS');
+    return;
+  }
+  let fi = document.getElementById('qr-file-input');
+  if (!fi) return;
+  setQrHint('Zrób zdjęcie kodu QR z panelu przy wejściu…');
+  fi.click();
+}
+
+function stopLiveScanner() {
+  if (!html5Qr) return;
+  let scanner = html5Qr;
+  html5Qr = null;
+  if (scanner.isScanning) {
+    scanner.stop().then(function() {
+      scanner.clear().catch(function() {});
+    }).catch(function() {});
+  } else {
+    try { scanner.clear(); } catch (e) {}
+  }
+}
+
+function startLiveScanner() {
+  if (qrLiveStarting) return;
+  if (!isHttpsOk()) {
+    showEmpToast('Wymagane HTTPS');
     return;
   }
   if (typeof Html5Qrcode === 'undefined') {
-    showEmpToast('Skaner nie załadowany — sprawdź internet');
+    showEmpToast('Brak biblioteki skanera — odśwież stronę');
     return;
   }
 
-  qrOpening = true;
-  qrScanHandled = false;
+  qrLiveStarting = true;
+  stopLiveScanner();
 
-  let overlay = document.getElementById('qr-reader-overlay');
-  let readerEl = document.getElementById('qr-reader');
-  overlay.classList.add('open');
-  overlay.setAttribute('aria-hidden', 'false');
+  let liveWrap = document.getElementById('qr-live-wrap');
+  let readerEl = document.getElementById('qr-live-reader');
+  liveWrap.classList.add('show');
   readerEl.innerHTML = '';
+  setQrHint('Uruchamianie kamery na żywo…');
 
-  function bootScanner() {
-    html5Qr = new Html5Qrcode('qr-reader', {
-      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-      verbose: false,
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-    });
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      html5Qr = new Html5Qrcode('qr-live-reader', { verbose: false });
 
-    let side = Math.min(window.innerWidth, window.innerHeight, 400);
-    side = Math.max(220, Math.floor(side * 0.75));
+      function qrbox(viewfinderWidth, viewfinderHeight) {
+        let m = Math.min(viewfinderWidth, viewfinderHeight);
+        let s = Math.max(200, Math.floor(m * 0.82));
+        return { width: s, height: s };
+      }
 
-    let config = {
-      fps: 15,
-      qrbox: { width: side, height: side },
-      aspectRatio: 1.333333,
-      disableFlip: false
-    };
+      let config = { fps: 12, qrbox: qrbox, aspectRatio: 1.333 };
 
-    function restartCam(cameraIdOrConstraints) {
-      let stopP = html5Qr.isScanning ? html5Qr.stop() : Promise.resolve();
-      return stopP.catch(() => {}).then(() =>
-        html5Qr.start(
-          cameraIdOrConstraints,
+      function onScan(text) {
+        handleQrDecoded(text);
+      }
+
+      html5Qr.start(
+        { facingMode: 'environment' },
+        config,
+        onScan,
+        function() {}
+      ).then(function() {
+        qrLiveStarting = false;
+        setQrHint('Trzymaj kod w kwadracie');
+      }).catch(function(err) {
+        console.warn('Kamera tylna:', err);
+        if (!html5Qr) { qrLiveStarting = false; return; }
+        return html5Qr.start(
+          { facingMode: 'user' },
           config,
-          (text) => handleQrDecoded(text),
-          () => {}
-        )
-      );
-    }
+          onScan,
+          function() {}
+        );
+      }).then(function() {
+        if (html5Qr && html5Qr.isScanning) {
+          qrLiveStarting = false;
+          setQrHint('Skanuj kod w kwadracie');
+        }
+      }).catch(function(err) {
+        qrLiveStarting = false;
+        console.error('Kamera na żywo:', err);
+        setQrHint('Kamera na żywo niedostępna — użyj zielonego przycisku');
+        showEmpToast(cameraErrorMessage(err));
+        if (liveWrap) liveWrap.classList.remove('show');
+      });
+    });
+  });
+}
 
-    html5Qr.start(
-      { facingMode: 'environment' },
-      config,
-      (text) => handleQrDecoded(text),
-      () => {}
-    ).then(() => {
-      qrOpening = false;
-    }).catch((err) => {
-      console.warn('Kamera tylna — ponowna próba:', err);
-      return restartCam({ facingMode: 'environment' });
-    }).then(() => {
-      qrOpening = false;
-    }).catch((err) => {
-      console.warn('Kamera przednia jako zapas:', err);
-      return restartCam({ facingMode: 'user' });
-    }).then(() => {
-      qrOpening = false;
-    }).catch((err) => {
-      console.error('Camera error:', err);
-      qrOpening = false;
-      showEmpToast(cameraErrorMessage(err));
+function scanQrFromImageSource(img) {
+  if (typeof jsQR === 'undefined') {
+    showEmpToast('Brak skanera — sprawdź internet i odśwież');
+    return false;
+  }
+  let canvas = document.getElementById('qr-canvas');
+  let ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let w = img.naturalWidth || img.width;
+  let h = img.naturalHeight || img.height;
+  if (!w || !h) return false;
+
+  let size = Math.min(Math.max(w, h), 1200);
+  canvas.width = size;
+  canvas.height = size;
+  let scale = size / Math.max(w, h);
+  let dw = Math.round(w * scale);
+  let dh = Math.round(h * scale);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, size, size);
+  ctx.drawImage(img, Math.floor((size - dw) / 2), Math.floor((size - dh) / 2), dw, dh);
+
+  let data = ctx.getImageData(0, 0, size, size);
+  let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
+  if (code && code.data) {
+    handleQrDecoded(code.data);
+    return true;
+  }
+  return false;
+}
+
+function scanQrFromFile(file) {
+  if (!file) return;
+  let url = URL.createObjectURL(file);
+  let img = new Image();
+  img.onload = function() {
+    if (!scanQrFromImageSource(img)) {
+      showEmpToast('Nie widać kodu QR — zbliż się i sfotografuj ponownie');
+    } else {
       closeCam();
-    });
-  }
-
-  if (html5Qr && html5Qr.isScanning) {
-    html5Qr.stop().then(() => {
-      html5Qr.clear().catch(() => {});
-      html5Qr = null;
-      bootScanner();
-    }).catch(() => {
-      html5Qr = null;
-      bootScanner();
-    });
-  } else {
-    if (html5Qr) {
-      try { html5Qr.clear(); } catch (e) {}
-      html5Qr = null;
     }
-    bootScanner();
-  }
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = function() {
+    showEmpToast('Nie można odczytać zdjęcia');
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
 }
 
 function cameraErrorMessage(err) {
@@ -1180,26 +1323,26 @@ function cameraErrorMessage(err) {
 
 function closeCam() {
   qrScanHandled = false;
-  qrOpening = false;
-
-  if (html5Qr) {
-    let scanner = html5Qr;
-    html5Qr = null;
-    if (scanner.isScanning) {
-      scanner.stop().then(() => scanner.clear().catch(() => {})).catch(() => {});
-    } else {
-      try { scanner.clear(); } catch (e) {}
-    }
-  }
-
+  qrLiveStarting = false;
+  stopLiveScanner();
+  let liveWrap = document.getElementById('qr-live-wrap');
+  if (liveWrap) liveWrap.classList.remove('show');
   let overlay = document.getElementById('qr-reader-overlay');
-  let readerEl = document.getElementById('qr-reader');
   if (overlay) {
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
   }
-  if (readerEl) readerEl.innerHTML = '';
 }
+
+(function() {
+  let fi = document.getElementById('qr-file-input');
+  if (!fi) return;
+  fi.addEventListener('change', function(e) {
+    let file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (file) scanQrFromFile(file);
+  });
+})();
 
 function handleQrDecoded(text) {
   if (qrScanHandled) return;
@@ -1264,6 +1407,7 @@ function showEmpToast(msg) {
 // Disable pull-to-refresh
 document.body.style.overscrollBehavior = 'none';
 document.documentElement.style.overscrollBehavior = 'none';
+
 </script>
 
 <div style="text-align:center;padding:16px;font-size:11px;color:var(--text3,#9ca3af);border-top:1px solid var(--border,#e5e7eb);margin-top:auto;">

@@ -2,7 +2,7 @@
   "name": "SECP — Ewidencja Czasu Pracy",
   "short_name": "SECP",
   "description": "Smart Employee Control Panel — rejestracja czasu pracy",
-  "start_url": "/secp-app/secp_employee.html",
+  "start_url": "./spec_employee.html",
   "display": "standalone",
   "background_color": "#f0f4ff",
   "theme_color": "#1a56db",
@@ -23,5 +23,5 @@
   ],
   "categories": ["business", "productivity"],
   "lang": "pl",
-  "scope": "/secp-app/"
+  "scope": "./"
 }
