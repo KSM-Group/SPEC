@@ -845,19 +845,22 @@ function showPage(name) {
   document.getElementById('page-title').textContent = titles[name] || name;
   event.currentTarget.classList.add('active');
 
-  // Załaduj iframe przy pierwszym otwarciu
+  // Załaduj iframe - zawsze z client i autologin
   let clientId = ADMIN_CLIENT_ID || localStorage.getItem('secp-admin-client') || '';
-  let param = clientId ? '?client=' + clientId : '';
+  if (!clientId) return;
+  let sess = {};
+  try { sess = JSON.parse(localStorage.getItem('secp-admin-session') || '{}'); } catch(e) {}
+  let param = '?client=' + clientId + (sess.email ? '&autologin=' + encodeURIComponent(sess.email) : '') + '&v=' + Date.now();
   if (name === 'lista') {
     let fr = document.getElementById('iframe-lista');
     if (fr.src === 'about:blank' || fr.src === window.location.href) {
-      fr.src = 'https://ksm-group.github.io/lista-obecnosci/index.html' + param + '&v=' + Date.now();
+      fr.src = 'https://ksm-group.github.io/lista-obecnosci/index.html' + param;
     }
   }
   if (name === 'dash') {
     let fr = document.getElementById('iframe-dash');
     if (fr.src === 'about:blank' || fr.src === window.location.href) {
-      fr.src = 'https://ksm-group.github.io/lista-obecnosci/dashboard.html' + param + '&v=' + Date.now();
+      fr.src = 'https://ksm-group.github.io/lista-obecnosci/dashboard.html' + param;
     }
   }
 }
