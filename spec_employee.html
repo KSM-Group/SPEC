@@ -687,6 +687,12 @@ body {
 </div>
 
 <script>
+const SB_URL='https://rccxsogpkqiunyooqaeg.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
+const SB_HDR={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+async function sbGet(cId){let r=await fetch(SB_URL+'/rest/v1/client_data?client_id=eq.'+cId+'&select=data',{headers:SB_HDR});let rows=await r.json();return(rows&&rows.length)?rows[0].data:null;}
+async function sbSet(cId,data){let r=await fetch(SB_URL+'/rest/v1/client_data?client_id=eq.'+cId,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify({data,updated_at:new Date().toISOString()})});if(!r.ok){await fetch(SB_URL+'/rest/v1/client_data',{method:'POST',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify({client_id:cId,data})});}}
+
 // ── STATE ─────────────────────────────────────────────────────
 let currentEmployee = null;
 let workState = 'idle'; // idle | working | break
@@ -697,7 +703,7 @@ let todayEvents = [];
 let workTimerInterval = null;
 
 const SECP_DATA_KEY = 'secp-emp-data';
-const SECP_GOOGLE_SCRIPT = 'https://script.google.com/macros/s/AKfycbwydWACfM8KWufP4jQXz7aG27Ffn7mEOKYg39EYbzz0rkvwHPGO3PTT9XFxONfMKuS6/exec';
+
 
 // ── CLIENT ID ─────────────────────────────────────────────────
 let SECP_CLIENT_ID = '';
@@ -1082,22 +1088,16 @@ function loadTodayState() {
 // ── GOOGLE SYNC ───────────────────────────────────────────────
 async function syncToGoogle(event) {
   try {
-    // Read current data, add event, write back
-    let resp = await fetch(getScriptUrl());
-    let raw = await resp.text();
-    let data = JSON.parse(raw);
+    let cId = SECP_CLIENT_ID || localStorage.getItem('secp-client-id') || 'default';
+    let data = await sbGet(cId) || {};
     if (!data.attendance) data.attendance = [];
-
     data.attendance.push({
       employee: currentEmployee ? currentEmployee.name : '?',
       ...event,
       date: new Date().toISOString().slice(0,10)
     });
-
-    await fetch(getScriptUrl(), { method: 'POST', body: JSON.stringify({...data, clientId: SECP_CLIENT_ID}) });
-  } catch(e) {
-    console.log('Sync error (offline mode):', e);
-  }
+    await sbSet(cId, data);
+  } catch(e) { console.log('Sync error:', e); }
 }
 
 // ── SCREENS ───────────────────────────────────────────────────
@@ -1116,7 +1116,7 @@ let qrLastScanTs = 0;
 let qrBarcodeDetector = null;
 let qrTorchOn = false;
 const QR_SCAN_MS = 50;
-const QR_DECODE_PX = 640;
+const QR_DECODE_PX = 800;
 
 function setQrHint(text) {
   let el = document.getElementById('qr-scan-hint');
@@ -1243,7 +1243,7 @@ function enhanceLiveCameraFocus() {
   if (qrFocusTimer) clearInterval(qrFocusTimer);
   qrFocusTimer = setInterval(function() {
     if (qrStream) refocusLiveCamera(false);
-  }, 2200);
+  }, 1500);
 
   video.onclick = function() {
     refocusLiveCamera(true);
@@ -1359,7 +1359,7 @@ function liveQrTickJs() {
   let ctx = canvas.getContext('2d', { willReadFrequently: true });
   let vw = video.videoWidth;
   let vh = video.videoHeight;
-  let crop = Math.floor(Math.min(vw, vh) * 0.9);
+  let crop = Math.floor(Math.min(vw, vh) * 0.95);
   let sx = Math.floor((vw - crop) / 2);
   let sy = Math.floor((vh - crop) / 2);
   let size = QR_DECODE_PX;
