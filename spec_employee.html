@@ -455,6 +455,9 @@ body {
   object-fit: cover;
   background: #000;
   cursor: pointer;
+  /* Filtry dla ostrzejszego obrazu - poprawa kontrastu, mniej szumu */
+  filter: contrast(1.15) saturate(1.05) brightness(1.0);
+  -webkit-filter: contrast(1.15) saturate(1.05) brightness(1.0);
 }
 .qr-scan-frame {
   position: absolute;
@@ -1214,12 +1217,9 @@ function refocusLiveCamera(showToast, x, y) {
     constraints.push({ focusDistance: fd });
   }
 
-  // 4. Exposure - jasniej dla lepszego kontrastu
+  // 4. Exposure - DAJ KAMERZE auto-control, nie forsuj jasności (powoduje szum)
   if (caps.exposureMode && caps.exposureMode.indexOf('continuous') >= 0) {
     constraints.push({ exposureMode: 'continuous' });
-  }
-  if (caps.exposureCompensation && typeof caps.exposureCompensation.max === 'number') {
-    constraints.push({ exposureCompensation: caps.exposureCompensation.max * 0.3 });
   }
 
   // 5. White balance auto
@@ -1227,9 +1227,9 @@ function refocusLiveCamera(showToast, x, y) {
     constraints.push({ whiteBalanceMode: 'continuous' });
   }
 
-  // 6. ISO - wyższe ISO w słabym świetle
-  if (caps.iso && typeof caps.iso.max === 'number') {
-    constraints.push({ iso: Math.min(caps.iso.max, caps.iso.min * 4) });
+  // 6. ISO - AUTO, nie wymuszaj wysokiego (powoduje śnieg/szum)
+  if (caps.iso && caps.iso.min) {
+    constraints.push({ iso: caps.iso.min }); // najniższe ISO = czysty obraz
   }
 
   // 7. Zoom - lekki dla lepszej rozdzielczości QR
@@ -1435,7 +1435,10 @@ function liveQrTickJs() {
 
   canvas.width = size;
   canvas.height = size;
+  // Apply contrast/brightness filter when drawing - lepiej dla jsQR
+  ctx.filter = 'contrast(1.4) brightness(1.05)';
   ctx.drawImage(video, sx, sy, crop, crop, 0, 0, size, size);
+  ctx.filter = 'none';
 
   let data = ctx.getImageData(0, 0, size, size);
   let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
