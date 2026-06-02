@@ -506,6 +506,7 @@ body {
 .qr-torch-btn.hidden { display: none; }
 </style>
 <meta http-equiv="Permissions-Policy" content="camera=(self)"/>
+<script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
@@ -1318,14 +1319,26 @@ function enhanceLiveCameraFocus() {
   };
 }
 
+// ZXing reader - profesjonalna biblioteka Google
+let qrZxingReader = null;
+
 function initQrBarcodeDetector() {
   qrBarcodeDetector = null;
-  if (!('BarcodeDetector' in window)) return;
-  BarcodeDetector.getSupportedFormats().then(function(formats) {
-    if (formats && formats.indexOf('qr_code') >= 0) {
-      qrBarcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+  if ('BarcodeDetector' in window) {
+    BarcodeDetector.getSupportedFormats().then(function(formats) {
+      if (formats && formats.indexOf('qr_code') >= 0) {
+        qrBarcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+      }
+    }).catch(function() {});
+  }
+  // Inicjuj ZXing jako uniwersalny fallback (lepszy niż jsQR)
+  if (typeof ZXingBrowser !== 'undefined' && !qrZxingReader) {
+    try {
+      qrZxingReader = new ZXingBrowser.BrowserQRCodeReader();
+    } catch(e) {
+      console.warn('ZXing init:', e);
     }
-  }).catch(function() {});
+  }
 }
 
 function attachQrStream(stream) {
@@ -1422,7 +1435,7 @@ function startLiveScanner() {
 
 function liveQrTickJs() {
   let video = document.getElementById('qr-video');
-  if (!video || !video.videoWidth || typeof jsQR === 'undefined') return;
+  if (!video || !video.videoWidth) return;
 
   let canvas = document.getElementById('qr-canvas');
   let ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -1435,14 +1448,30 @@ function liveQrTickJs() {
 
   canvas.width = size;
   canvas.height = size;
-  // Apply contrast/brightness filter when drawing - lepiej dla jsQR
+  // Filter dla lepszego dekodowania (nie wpływa na widok)
   ctx.filter = 'contrast(1.4) brightness(1.05)';
   ctx.drawImage(video, sx, sy, crop, crop, 0, 0, size, size);
   ctx.filter = 'none';
 
-  let data = ctx.getImageData(0, 0, size, size);
-  let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
-  if (code && code.data) handleQrDecoded(code.data);
+  // Spróbuj ZXing (lepszy niż jsQR) - profesjonalna biblioteka Google
+  if (qrZxingReader) {
+    try {
+      let result = qrZxingReader.decodeFromCanvas(canvas);
+      if (result && result.getText) {
+        let text = result.getText();
+        if (text) { handleQrDecoded(text); return; }
+      }
+    } catch(e) {
+      // ZXing nie znalazł kodu - spróbuj jsQR jako fallback
+    }
+  }
+
+  // Fallback: jsQR
+  if (typeof jsQR !== 'undefined') {
+    let data = ctx.getImageData(0, 0, size, size);
+    let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
+    if (code && code.data) handleQrDecoded(code.data);
+  }
 }
 
 function liveQrTick() {
