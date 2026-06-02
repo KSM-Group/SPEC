@@ -394,6 +394,7 @@ const SB_URL = 'https://rccxsogpkqiunyooqaeg.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjY3hzb2dwa3FpdW55b29xYWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTM2MDQsImV4cCI6MjA5NDkyOTYwNH0.LPhObNlNNI3K26oIKrOi1tmVcQxKkWxCy4GEVB5yv6U';
 const SB_HDR = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
 let ADMIN_CLIENT_ID = '';
+let ADMIN_EMAIL = '';
 let ADMIN_LOGINS = [];
 
 async function sbLoadData(clientId) {
@@ -429,8 +430,7 @@ async function loadAdminClientConfig() {
 }
 
 function adminLogout() {
-  localStorage.removeItem('secp-admin-session');
-  localStorage.removeItem('secp-admin-client');
+  // sesja wyczyszczona z pamięci
   ADMIN_CLIENT_ID = '';
   document.getElementById('layout').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
@@ -438,25 +438,7 @@ function adminLogout() {
   document.getElementById('auth-password').value = '';
 }
 
-document.addEventListener('DOMContentLoaded', async function() {
-  // ?client= w URL ma zawsze priorytet
-  let urlClient = new URLSearchParams(window.location.search).get('client');
-  let saved = localStorage.getItem('secp-admin-session');
-  if (saved) {
-    try {
-      let sess = JSON.parse(saved);
-      if (sess.email && sess.clientId) {
-        // Jeśli URL ma inny client niż sesja - wyloguj
-        if (urlClient && urlClient !== sess.clientId) {
-          localStorage.removeItem('secp-admin-session');
-          localStorage.removeItem('secp-admin-client');
-        } else {
-          ADMIN_CLIENT_ID = sess.clientId;
-          showAdmin(sess.email); return;
-        }
-      }
-    } catch(e) {}
-  }
+document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('auth-btn').addEventListener('click', doAdminLogin);
   document.getElementById('auth-password').addEventListener('keydown', e => { if(e.key==='Enter') doAdminLogin(); });
@@ -480,8 +462,7 @@ async function doAdminLogin() {
     }
     let clientId = rows[0].client_id;
     ADMIN_CLIENT_ID = clientId;
-    localStorage.setItem('secp-admin-client', clientId);
-    localStorage.setItem('secp-admin-session', JSON.stringify({ email, clientId }));
+    ADMIN_EMAIL = email;
     showAdmin(email);
   } catch(e) {
     err.textContent = 'Błąd połączenia. Spróbuj ponownie.'; err.style.display = 'block';
@@ -503,7 +484,7 @@ function showAdmin(email) {
 
 async function loadData() {
   try {
-    let clientId = ADMIN_CLIENT_ID || localStorage.getItem('secp-admin-client') || 'default';
+    let clientId = ADMIN_CLIENT_ID || 'default';
     allData = await sbLoadData(clientId) || {};
     employees = (allData.employees || []).map(e => typeof e === 'string' ? {name:e,group:''} : e);
     groups = allData.groups || [];
@@ -532,6 +513,9 @@ function loadDemoData() {
   renderTimeline();
   renderReport();
   updateBadges();
+  // Wczytaj shifts z danych klienta
+  if (allData.shifts) shifts = allData.shifts;
+  if (allData.shiftTolerance) shiftTolerance = allData.shiftTolerance;
   renderShiftsList();
 }
 
@@ -811,7 +795,7 @@ async function rejectDelegation(i) {
 async function saveData() {
   try {
     allData.delegations = delegations;
-    let cId = ADMIN_CLIENT_ID || localStorage.getItem('secp-admin-client') || 'default';
+    let cId = ADMIN_CLIENT_ID || 'default';
     await sbSaveData(cId, allData);
   } catch(e) { console.log('Save error:', e); }
 }
@@ -846,11 +830,9 @@ function showPage(name) {
   event.currentTarget.classList.add('active');
 
   // Załaduj iframe - zawsze z client i autologin
-  let clientId = ADMIN_CLIENT_ID || localStorage.getItem('secp-admin-client') || '';
+  let clientId = ADMIN_CLIENT_ID || '';
   if (!clientId) return;
-  let sess = {};
-  try { sess = JSON.parse(localStorage.getItem('secp-admin-session') || '{}'); } catch(e) {}
-  let param = '?client=' + clientId + (sess.email ? '&autologin=' + encodeURIComponent(sess.email) : '') + '&v=' + Date.now();
+  let param = '?client=' + clientId + (typeof ADMIN_EMAIL !== 'undefined' && ADMIN_EMAIL ? '&autologin=' + encodeURIComponent(ADMIN_EMAIL) : '') + '&v=' + Date.now();
   if (name === 'lista') {
     let fr = document.getElementById('iframe-lista');
     if (fr.src === 'about:blank' || fr.src === window.location.href) {
@@ -872,8 +854,8 @@ function showToast(msg) {
 }
 
 // ── SHIFTS ────────────────────────────────────────────────────
-let shifts = JSON.parse(localStorage.getItem('secp-shifts') || '[{"name":"I ZMIANA","time":"06:00"},{"name":"II ZMIANA","time":"14:00"}]');
-let shiftTolerance = parseInt(localStorage.getItem('secp-shift-tolerance') || '15');
+let shifts = [{"name":"I ZMIANA","time":"06:00"},{"name":"II ZMIANA","time":"14:00"}];
+let shiftTolerance = 15;
 
 function renderShiftsList() {
   let list = document.getElementById('shifts-list');
@@ -901,8 +883,8 @@ function removeShift(i) {
 
 function saveShifts() {
   shiftTolerance = parseInt(document.getElementById('shift-tolerance').value) || 15;
-  localStorage.setItem('secp-shifts', JSON.stringify(shifts));
-  localStorage.setItem('secp-shift-tolerance', shiftTolerance);
+  localStorage.setItem('spec-shifts', JSON.stringify(shifts));
+  localStorage.setItem('spec-shift-tolerance', shiftTolerance);
   showToast('Ustawienia zmian zapisane!');
   renderLateToday();
 }
