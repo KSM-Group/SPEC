@@ -1177,37 +1177,64 @@ function getQrVideoTrack() {
   return null;
 }
 
-function refocusLiveCamera(showToast) {
+function refocusLiveCamera(showToast, x, y) {
   let track = getQrVideoTrack();
   if (!track) return;
   let caps = track.getCapabilities ? track.getCapabilities() : {};
   let modes = caps.focusMode || [];
   let chain = Promise.resolve();
 
-  if (modes.indexOf('single-shot') >= 0) {
-    chain = track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
-      .catch(function() {});
+  // 1. Tap-to-focus point if x,y provided
+  if (typeof x === 'number' && typeof y === 'number' && caps.pointsOfInterest) {
+    chain = chain.then(function() {
+      return track.applyConstraints({ advanced: [{ pointsOfInterest: [{x: x, y: y}] }] }).catch(function(){});
+    });
   }
+
+  // 2. Single-shot focus (wymusza re-focus)
+  if (modes.indexOf('single-shot') >= 0) {
+    chain = chain.then(function() {
+      return track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }).catch(function(){});
+    });
+  }
+
+  // 3. Continuous focus (na Samsungu często działa)
   chain = chain.then(function() {
     if (modes.indexOf('continuous') >= 0) {
-      return track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+      return track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function(){});
     }
     if (modes.indexOf('auto') >= 0) {
-      return track.applyConstraints({ focusMode: 'auto' });
+      return track.applyConstraints({ advanced: [{ focusMode: 'auto' }] }).catch(function(){});
     }
   });
+
+  // 4. Manual focus distance dla bliskich obiektów (10-30cm)
+  if (caps.focusDistance && typeof caps.focusDistance.min === 'number') {
+    chain = chain.then(function() {
+      let fd = caps.focusDistance.min + (caps.focusDistance.max - caps.focusDistance.min) * 0.15;
+      return track.applyConstraints({ advanced: [{ focusDistance: fd }] }).catch(function(){});
+    });
+  }
+
+  // 5. Exposure compensation - jasniej dla lepszego kontrastu
+  if (caps.exposureCompensation && typeof caps.exposureCompensation.max === 'number') {
+    chain = chain.then(function() {
+      return track.applyConstraints({ advanced: [{ exposureCompensation: caps.exposureCompensation.max * 0.5 }] }).catch(function(){});
+    });
+  }
+
+  // 6. Zoom 35% dla bliższego obrazu QR
   if (caps.zoom && typeof caps.zoom.min === 'number') {
     let z = Math.min(caps.zoom.max, Math.max(caps.zoom.min, (caps.zoom.min + caps.zoom.max) * 0.35));
     chain = chain.then(function() {
-      return track.applyConstraints({ advanced: [{ zoom: z }] }).catch(function() {});
+      return track.applyConstraints({ advanced: [{ zoom: z }] }).catch(function(){});
     });
   }
+
   if (showToast) {
-    chain.then(function() {
-      showEmpToast('Ustawiam ostrość…');
-    }).catch(function() {});
+    chain.then(function() { showEmpToast('Ustawiam ostrość…'); }).catch(function(){});
   } else {
-    chain.catch(function() {});
+    chain.catch(function(){});
   }
 }
 
@@ -1245,8 +1272,21 @@ function enhanceLiveCameraFocus() {
     if (qrStream) refocusLiveCamera(false);
   }, 1500);
 
-  video.onclick = function() {
-    refocusLiveCamera(true);
+  // Tap-to-focus z dokładną pozycją (Samsung S24 wymaga)
+  video.onclick = function(e) {
+    let rect = video.getBoundingClientRect();
+    let x = (e.clientX - rect.left) / rect.width;
+    let y = (e.clientY - rect.top) / rect.height;
+    refocusLiveCamera(true, x, y);
+  };
+  video.ontouchend = function(e) {
+    if (e.changedTouches && e.changedTouches.length) {
+      let rect = video.getBoundingClientRect();
+      let t = e.changedTouches[0];
+      let x = (t.clientX - rect.left) / rect.width;
+      let y = (t.clientY - rect.top) / rect.height;
+      refocusLiveCamera(true, x, y);
+    }
   };
 }
 
@@ -1270,7 +1310,8 @@ function attachQrStream(stream) {
   if (p && p.catch) p.catch(function() {});
   qrLiveStarting = false;
   initQrBarcodeDetector();
-  enhanceLiveCameraFocus();
+  // Opóźnij enhance - track potrzebuje czasu na załadowanie capabilities
+  setTimeout(function(){ enhanceLiveCameraFocus(); }, 500);
   setQrHint('Kod w białej ramce · dotknij ekranu = ostrość');
   runLiveQrLoop();
 }
