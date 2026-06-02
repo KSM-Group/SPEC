@@ -1179,63 +1179,78 @@ function getQrVideoTrack() {
 
 function refocusLiveCamera(showToast, x, y) {
   let track = getQrVideoTrack();
-  if (!track) return;
-  let caps = track.getCapabilities ? track.getCapabilities() : {};
-  let modes = caps.focusMode || [];
-  let chain = Promise.resolve();
+  if (!track) return Promise.resolve();
+  let caps = {};
+  try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch(e) {}
 
-  // 1. Tap-to-focus point if x,y provided
-  if (typeof x === 'number' && typeof y === 'number' && caps.pointsOfInterest) {
-    chain = chain.then(function() {
-      return track.applyConstraints({ advanced: [{ pointsOfInterest: [{x: x, y: y}] }] }).catch(function(){});
-    });
+  let constraints = [];
+
+  // 1. Tap-to-focus point - jeśli kamera wspiera
+  if (typeof x === 'number' && typeof y === 'number') {
+    if (caps.pointsOfInterest) {
+      constraints.push({ pointsOfInterest: [{x: x, y: y}] });
+    }
   }
 
-  // 2. Single-shot focus (wymusza re-focus)
-  if (modes.indexOf('single-shot') >= 0) {
-    chain = chain.then(function() {
-      return track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }).catch(function(){});
-    });
+  // 2. Continuous focus mode - najpierw priorytet
+  let focusModes = caps.focusMode || [];
+  if (focusModes.length) {
+    // single-shot wymusza re-focus
+    if (focusModes.indexOf('single-shot') >= 0) {
+      constraints.push({ focusMode: 'single-shot' });
+    }
+    // potem continuous dla ciągłej ostrości
+    if (focusModes.indexOf('continuous') >= 0) {
+      constraints.push({ focusMode: 'continuous' });
+    } else if (focusModes.indexOf('auto') >= 0) {
+      constraints.push({ focusMode: 'auto' });
+    }
   }
 
-  // 3. Continuous focus (na Samsungu często działa)
-  chain = chain.then(function() {
-    if (modes.indexOf('continuous') >= 0) {
-      return track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function(){});
-    }
-    if (modes.indexOf('auto') >= 0) {
-      return track.applyConstraints({ advanced: [{ focusMode: 'auto' }] }).catch(function(){});
-    }
-  });
-
-  // 4. Manual focus distance dla bliskich obiektów (10-30cm)
+  // 3. Manual focus distance dla bliskich QR (jeśli dostępne)
   if (caps.focusDistance && typeof caps.focusDistance.min === 'number') {
-    chain = chain.then(function() {
-      let fd = caps.focusDistance.min + (caps.focusDistance.max - caps.focusDistance.min) * 0.15;
-      return track.applyConstraints({ advanced: [{ focusDistance: fd }] }).catch(function(){});
-    });
+    let range = caps.focusDistance.max - caps.focusDistance.min;
+    let fd = caps.focusDistance.min + range * 0.1; // bardzo blisko (10cm)
+    constraints.push({ focusDistance: fd });
   }
 
-  // 5. Exposure compensation - jasniej dla lepszego kontrastu
+  // 4. Exposure - jasniej dla lepszego kontrastu
+  if (caps.exposureMode && caps.exposureMode.indexOf('continuous') >= 0) {
+    constraints.push({ exposureMode: 'continuous' });
+  }
   if (caps.exposureCompensation && typeof caps.exposureCompensation.max === 'number') {
-    chain = chain.then(function() {
-      return track.applyConstraints({ advanced: [{ exposureCompensation: caps.exposureCompensation.max * 0.5 }] }).catch(function(){});
-    });
+    constraints.push({ exposureCompensation: caps.exposureCompensation.max * 0.3 });
   }
 
-  // 6. Zoom 35% dla bliższego obrazu QR
-  if (caps.zoom && typeof caps.zoom.min === 'number') {
-    let z = Math.min(caps.zoom.max, Math.max(caps.zoom.min, (caps.zoom.min + caps.zoom.max) * 0.35));
-    chain = chain.then(function() {
-      return track.applyConstraints({ advanced: [{ zoom: z }] }).catch(function(){});
-    });
+  // 5. White balance auto
+  if (caps.whiteBalanceMode && caps.whiteBalanceMode.indexOf('continuous') >= 0) {
+    constraints.push({ whiteBalanceMode: 'continuous' });
   }
+
+  // 6. ISO - wyższe ISO w słabym świetle
+  if (caps.iso && typeof caps.iso.max === 'number') {
+    constraints.push({ iso: Math.min(caps.iso.max, caps.iso.min * 4) });
+  }
+
+  // 7. Zoom - lekki dla lepszej rozdzielczości QR
+  if (caps.zoom && typeof caps.zoom.min === 'number') {
+    let zr = caps.zoom.max - caps.zoom.min;
+    let z = caps.zoom.min + zr * 0.25;
+    constraints.push({ zoom: z });
+  }
+
+  // Aplikuj wszystkie constraints po kolei - jeśli któryś nie wspierany, idź dalej
+  let chain = Promise.resolve();
+  constraints.forEach(function(c) {
+    chain = chain.then(function() {
+      return track.applyConstraints({ advanced: [c] }).catch(function() {});
+    });
+  });
 
   if (showToast) {
     chain.then(function() { showEmpToast('Ustawiam ostrość…'); }).catch(function(){});
-  } else {
-    chain.catch(function(){});
   }
+  return chain;
 }
 
 function updateTorchButton() {
@@ -1265,14 +1280,27 @@ function enhanceLiveCameraFocus() {
   video.setAttribute('playsinline', 'true');
   video.setAttribute('webkit-playsinline', 'true');
 
-  refocusLiveCamera(false);
+  // Czekaj na loadedmetadata - track ma capabilities dopiero wtedy
+  let triedRefocus = false;
+  let doInitialRefocus = function() {
+    if (triedRefocus) return;
+    triedRefocus = true;
+    refocusLiveCamera(false);
+    setTimeout(function() { refocusLiveCamera(false); }, 300);
+    setTimeout(function() { refocusLiveCamera(false); }, 800);
+  };
+  if (video.readyState >= 2) doInitialRefocus();
+  else video.addEventListener('loadedmetadata', doInitialRefocus, { once: true });
+
   updateTorchButton();
+
+  // Stały timer co 800ms - agresywnie wymusza focus
   if (qrFocusTimer) clearInterval(qrFocusTimer);
   qrFocusTimer = setInterval(function() {
     if (qrStream) refocusLiveCamera(false);
-  }, 1500);
+  }, 800);
 
-  // Tap-to-focus z dokładną pozycją (Samsung S24 wymaga)
+  // Tap-to-focus z dokładną pozycją
   video.onclick = function(e) {
     let rect = video.getBoundingClientRect();
     let x = (e.clientX - rect.left) / rect.width;
