@@ -506,7 +506,7 @@ body {
 .qr-torch-btn.hidden { display: none; }
 </style>
 <meta http-equiv="Permissions-Policy" content="camera=(self)"/>
-<script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
@@ -1332,9 +1332,9 @@ function initQrBarcodeDetector() {
     }).catch(function() {});
   }
   // Inicjuj ZXing jako uniwersalny fallback (lepszy niż jsQR)
-  if (typeof ZXingBrowser !== 'undefined' && !qrZxingReader) {
+  if (typeof ZXing !== 'undefined' && !qrZxingReader) {
     try {
-      qrZxingReader = new ZXingBrowser.BrowserQRCodeReader();
+      qrZxingReader = new ZXing.BrowserQRCodeReader();
     } catch(e) {
       console.warn('ZXing init:', e);
     }
@@ -1453,10 +1453,16 @@ function liveQrTickJs() {
   ctx.drawImage(video, sx, sy, crop, crop, 0, 0, size, size);
   ctx.filter = 'none';
 
-  // Spróbuj ZXing (lepszy niż jsQR) - profesjonalna biblioteka Google
+  // Pobierz dane piksli z canvas
+  let imageData = ctx.getImageData(0, 0, size, size);
+
+  // Spróbuj ZXing - profesjonalna biblioteka Google
   if (qrZxingReader) {
     try {
-      let result = qrZxingReader.decodeFromCanvas(canvas);
+      // Stwórz luminance source z image data
+      let luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+      let binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+      let result = qrZxingReader.decode(binaryBitmap);
       if (result && result.getText) {
         let text = result.getText();
         if (text) { handleQrDecoded(text); return; }
@@ -1468,8 +1474,7 @@ function liveQrTickJs() {
 
   // Fallback: jsQR
   if (typeof jsQR !== 'undefined') {
-    let data = ctx.getImageData(0, 0, size, size);
-    let code = jsQR(data.data, size, size, { inversionAttempts: 'attemptBoth' });
+    let code = jsQR(imageData.data, size, size, { inversionAttempts: 'attemptBoth' });
     if (code && code.data) handleQrDecoded(code.data);
   }
 }
