@@ -1463,11 +1463,11 @@ function startHtml5QrScanner() {
       fps: 15,
       qrbox: { width: 250, height: 250 },
       aspectRatio: 1.0,
+      disableFlip: false,
       videoConstraints: {
         facingMode: 'environment',
         width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        advanced: [{ focusMode: 'continuous' }]
+        height: { ideal: 1080 }
       }
     };
     html5QrScanner.start(
