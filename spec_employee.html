@@ -1620,14 +1620,20 @@ function liveQrTick() {
   let video = document.getElementById('qr-video');
   if (!video || !video.videoWidth) return;
 
-  // Tryb 'native' - tylko BarcodeDetector
+  // Tryb 'native' - BarcodeDetector (Google ML Kit), fallback ZXing
   if (QR_SCAN_MODE === 'native') {
     if (qrBarcodeDetector) {
       qrBarcodeDetector.detect(video).then(function(codes) {
         if (codes && codes.length && codes[0].rawValue) {
           handleQrDecoded(codes[0].rawValue);
         }
-      }).catch(function() {});
+      }).catch(function() {
+        // BarcodeDetector zawiódł na tym kodzie - spróbuj ZXing
+        liveQrTickJs();
+      });
+    } else {
+      // BarcodeDetector niedostępny - użyj ZXing
+      liveQrTickJs();
     }
     return;
   }
@@ -1700,7 +1706,12 @@ function closeCam() {
 function handleQrDecoded(text) {
   if (qrScanHandled) return;
   let payload = parseQrPayload(text);
-  if (!payload) return;
+  if (!payload) {
+    showEmpToast('Niewłaściwy kod QR: ' + (text || '').substring(0, 50));
+    qrScanHandled = true;
+    setTimeout(function(){ qrScanHandled = false; }, 2500);
+    return;
+  }
 
   qrScanHandled = true;
   if (navigator.vibrate) navigator.vibrate(40);

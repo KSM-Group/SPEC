@@ -625,7 +625,8 @@ function generateAllQRs() {
     if (qrInstances[action]) { try { qrInstances[action].clear(); } catch(e) {} }
 
     let token = generateToken(action, currentCycleIndex);
-    let url = cfg.empUrl + '?action=' + action + '&token=' + token + '&cycle=' + currentCycleIndex;
+    let sep = cfg.empUrl.indexOf('?') >= 0 ? '&' : '?';
+    let url = cfg.empUrl + sep + 'action=' + action + '&token=' + token + '&cycle=' + currentCycleIndex;
 
     qrInstances[action] = new QRCode(el, {
       text: url,
@@ -675,7 +676,8 @@ function refreshQRs() {
       if (qrInstances[action]) { try { qrInstances[action].clear(); } catch(e) {} }
 
       let token = generateToken(action, currentCycleIndex);
-      let url = cfg.empUrl + '?action=' + action + '&token=' + token + '&cycle=' + currentCycleIndex;
+      let sep = cfg.empUrl.indexOf('?') >= 0 ? '&' : '?';
+      let url = cfg.empUrl + sep + 'action=' + action + '&token=' + token + '&cycle=' + currentCycleIndex;
 
       qrInstances[action] = new QRCode(el, {
         text: url,
