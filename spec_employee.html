@@ -459,6 +459,18 @@ body {
   filter: contrast(1.15) saturate(1.05) brightness(1.0);
   -webkit-filter: contrast(1.15) saturate(1.05) brightness(1.0);
 }
+.qr-mode-btn {
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 18px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+}
+.qr-mode-btn:hover { background: rgba(255,255,255,.2); }
 .qr-scan-frame {
   position: absolute;
   left: 50%;
@@ -506,6 +518,7 @@ body {
 .qr-torch-btn.hidden { display: none; }
 </style>
 <meta http-equiv="Permissions-Policy" content="camera=(self)"/>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -656,12 +669,14 @@ body {
   <div class="qr-scan-header">
     <button type="button" onclick="closeCam()">✕ Zamknij</button>
     <div class="qr-scan-title">Skanuj kod QR</div>
+    <button type="button" class="qr-mode-btn" id="qr-mode-btn" onclick="cycleQrMode()" title="Zmień skaner">⚙️ <span id="qr-mode-label">Auto</span></button>
     <button type="button" class="qr-torch-btn hidden" id="qr-torch-btn" onclick="toggleQrTorch()" title="Latarka">🔦</button>
   </div>
   <div id="qr-live-wrap">
     <div class="qr-scan-viewport">
       <video id="qr-video" autoplay playsinline muted webkit-playsinline></video>
       <canvas id="qr-canvas"></canvas>
+      <div id="qr-html5-container" style="display:none;width:100%;height:100%;"></div>
       <div class="qr-scan-frame" aria-hidden="true"></div>
     </div>
   </div>
@@ -1348,6 +1363,28 @@ function enhanceLiveCameraFocus() {
 
 // ZXing reader - profesjonalna biblioteka Google
 let qrZxingReader = null;
+// 3 tryby skanera: 'auto' (ZXing+jsQR), 'html5' (html5-qrcode), 'native' (BarcodeDetector)
+let QR_SCAN_MODE = localStorage.getItem('spec-qr-mode') || 'auto';
+let html5QrScanner = null;
+
+function cycleQrMode() {
+  let modes = ['auto', 'html5', 'native'];
+  let labels = { auto: 'Auto', html5: 'HTML5', native: 'Native' };
+  let idx = modes.indexOf(QR_SCAN_MODE);
+  QR_SCAN_MODE = modes[(idx + 1) % modes.length];
+  localStorage.setItem('spec-qr-mode', QR_SCAN_MODE);
+  document.getElementById('qr-mode-label').textContent = labels[QR_SCAN_MODE];
+  showEmpToast('Tryb: ' + labels[QR_SCAN_MODE] + ' — ponowne otwarcie skanera');
+  // Zatrzymaj obecny scanner i wymuś restart
+  stopLiveScanner();
+  setTimeout(function(){ openQrScanner(); }, 400);
+}
+
+function updateQrModeLabel() {
+  let labels = { auto: 'Auto', html5: 'HTML5', native: 'Native' };
+  let el = document.getElementById('qr-mode-label');
+  if (el) el.textContent = labels[QR_SCAN_MODE] || 'Auto';
+}
 
 function initQrBarcodeDetector() {
   qrBarcodeDetector = null;
@@ -1385,6 +1422,7 @@ function attachQrStream(stream) {
 }
 
 function stopLiveScanner() {
+  stopHtml5QrScanner();
   if (qrScanRaf) {
     cancelAnimationFrame(qrScanRaf);
     qrScanRaf = 0;
@@ -1411,14 +1449,80 @@ function stopLiveScanner() {
   }
 }
 
+function startHtml5QrScanner() {
+  if (typeof Html5Qrcode === 'undefined') {
+    showEmpToast('HTML5 niedostępny — przełącz na Auto');
+    return;
+  }
+  qrLiveStarting = true;
+  stopLiveScanner();
+  setQrHint('Tryb HTML5: włączanie kamery…');
+
+  // Ukryj nasze video, pokaż container html5-qrcode
+  document.getElementById('qr-video').style.display = 'none';
+  let container = document.getElementById('qr-html5-container');
+  container.style.display = 'block';
+  container.innerHTML = '<div id="html5-qr-reader" style="width:100%;height:100%;"></div>';
+
+  try {
+    html5QrScanner = new Html5Qrcode('html5-qr-reader', { verbose: false });
+    let config = {
+      fps: 15,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0,
+      videoConstraints: {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ focusMode: 'continuous' }]
+      }
+    };
+    html5QrScanner.start(
+      { facingMode: 'environment' },
+      config,
+      function(decodedText) {
+        handleQrDecoded(decodedText);
+      },
+      function() { /* skip errors per frame */ }
+    ).then(function() {
+      qrLiveStarting = false;
+      setQrHint('Tryb HTML5 · kod w ramce');
+    }).catch(function(err) {
+      qrLiveStarting = false;
+      console.error('HTML5 scanner error:', err);
+      showEmpToast('Błąd HTML5: ' + cameraErrorMessage(err));
+    });
+  } catch(e) {
+    qrLiveStarting = false;
+    showEmpToast('Błąd: ' + e.message);
+  }
+}
+
+function stopHtml5QrScanner() {
+  if (html5QrScanner) {
+    try {
+      html5QrScanner.stop().then(function() {
+        html5QrScanner.clear();
+        html5QrScanner = null;
+      }).catch(function() { html5QrScanner = null; });
+    } catch(e) { html5QrScanner = null; }
+  }
+  document.getElementById('qr-video').style.display = '';
+  document.getElementById('qr-html5-container').style.display = 'none';
+}
+
 function startLiveScanner() {
   if (qrLiveStarting) return;
   if (!isHttpsOk()) {
     showEmpToast('Wymagane HTTPS (GitHub Pages)');
     return;
   }
-  if (typeof jsQR === 'undefined') {
-    showEmpToast('Brak skanera — odśwież stronę (internet)');
+
+  updateQrModeLabel();
+
+  // Tryb HTML5-qrcode - własna logika
+  if (QR_SCAN_MODE === 'html5') {
+    startHtml5QrScanner();
     return;
   }
 
@@ -1521,6 +1625,19 @@ function liveQrTick() {
   let video = document.getElementById('qr-video');
   if (!video || !video.videoWidth) return;
 
+  // Tryb 'native' - tylko BarcodeDetector
+  if (QR_SCAN_MODE === 'native') {
+    if (qrBarcodeDetector) {
+      qrBarcodeDetector.detect(video).then(function(codes) {
+        if (codes && codes.length && codes[0].rawValue) {
+          handleQrDecoded(codes[0].rawValue);
+        }
+      }).catch(function() {});
+    }
+    return;
+  }
+
+  // Tryb 'auto' - BarcodeDetector → ZXing → jsQR
   if (qrBarcodeDetector) {
     qrBarcodeDetector.detect(video).then(function(codes) {
       if (codes && codes.length && codes[0].rawValue) {
