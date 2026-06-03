@@ -1333,11 +1333,8 @@ function enhanceLiveCameraFocus() {
 
   updateTorchButton();
 
-  // Stały timer co 800ms - agresywnie wymusza focus
-  if (qrFocusTimer) clearInterval(qrFocusTimer);
-  qrFocusTimer = setInterval(function() {
-    if (qrStream) refocusLiveCamera(false);
-  }, 800);
+  // BEZ pętlowego refocus - kamera sama utrzymuje continuous focus
+  // Tylko initial setup i tap-to-focus na żądanie
 
   // Tap-to-focus z dokładną pozycją
   video.onclick = function(e) {
@@ -1360,7 +1357,7 @@ function enhanceLiveCameraFocus() {
 // ZXing reader - profesjonalna biblioteka Google
 let qrZxingReader = null;
 // 3 tryby skanera: 'auto' (ZXing+jsQR), 'html5' (html5-qrcode), 'native' (BarcodeDetector)
-let QR_SCAN_MODE = localStorage.getItem('spec-qr-mode') || 'auto';
+let QR_SCAN_MODE = localStorage.getItem('spec-qr-mode') || 'html5';
 let html5QrScanner = null;
 
 function cycleQrMode() {
