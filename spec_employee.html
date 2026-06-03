@@ -1260,12 +1260,8 @@ function refocusLiveCamera(showToast, x, y) {
     constraints.push({ iso: caps.iso.min }); // najniższe ISO = czysty obraz
   }
 
-  // 7. Zoom - lekki dla lepszej rozdzielczości QR
-  if (caps.zoom && typeof caps.zoom.min === 'number') {
-    let zr = caps.zoom.max - caps.zoom.min;
-    let z = caps.zoom.min + zr * 0.25;
-    constraints.push({ zoom: z });
-  }
+  // 7. Zoom - USUNIĘTE (Samsung S24 odpala wtedy ultra-wide kamerę = szum)
+  // Kamera sama wybierze odpowiedni zoom
 
   // Aplikuj wszystkie constraints po kolei - jeśli któryś nie wspierany, idź dalej
   let chain = Promise.resolve();
