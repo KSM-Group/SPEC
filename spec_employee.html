@@ -1143,15 +1143,22 @@ function requestUserMedia(constraints) {
 }
 
 function buildCameraConstraints(deviceId) {
+  // Maksymalna jakość obrazu - 4K dla Samsung S24, mniej dla tanich
   let video = {
-    width: { ideal: 1920, min: 640 },
-    height: { ideal: 1080, min: 480 },
+    width: { ideal: 3840, min: 1280 },
+    height: { ideal: 2160, min: 720 },
+    frameRate: { ideal: 30, min: 15 },
     focusMode: { ideal: 'continuous' },
     exposureMode: { ideal: 'continuous' },
-    whiteBalanceMode: { ideal: 'continuous' }
+    whiteBalanceMode: { ideal: 'continuous' },
+    // Próba advanced focus - Samsung wspiera
+    advanced: [
+      { focusMode: 'continuous' },
+      { focusDistance: 0.1 } // bardzo blisko, 10cm
+    ]
   };
   if (deviceId) video.deviceId = { exact: deviceId };
-  else video.facingMode = { ideal: 'environment' };
+  else video.facingMode = { exact: 'environment' };
   return { audio: false, video: video };
 }
 
@@ -1211,11 +1218,16 @@ function refocusLiveCamera(showToast, x, y) {
     }
   }
 
-  // 3. Manual focus distance dla bliskich QR (jeśli dostępne)
+  // 3. Manual focus distance - próbuj agresywnie, kilka prób
   if (caps.focusDistance && typeof caps.focusDistance.min === 'number') {
     let range = caps.focusDistance.max - caps.focusDistance.min;
-    let fd = caps.focusDistance.min + range * 0.1; // bardzo blisko (10cm)
-    constraints.push({ focusDistance: fd });
+    // Najpierw bardzo blisko (5% zakresu = ~5-10cm), potem dalej
+    let fd1 = caps.focusDistance.min + range * 0.05;
+    let fd2 = caps.focusDistance.min + range * 0.15;
+    let fd3 = caps.focusDistance.min + range * 0.30;
+    constraints.push({ focusDistance: fd1 });
+    constraints.push({ focusDistance: fd2 });
+    constraints.push({ focusDistance: fd3 });
   }
 
   // 4. Exposure - DAJ KAMERZE auto-control, nie forsuj jasności (powoduje szum)
@@ -1280,6 +1292,21 @@ function enhanceLiveCameraFocus() {
   video.dataset.focusReady = '1';
   video.setAttribute('playsinline', 'true');
   video.setAttribute('webkit-playsinline', 'true');
+
+  // Diagnostyka - co kamera obsługuje (na chwilę)
+  setTimeout(function() {
+    let track = getQrVideoTrack();
+    if (track && track.getCapabilities) {
+      let caps = track.getCapabilities();
+      let info = [];
+      if (caps.focusMode) info.push('Focus: ' + caps.focusMode.join(','));
+      if (caps.focusDistance) info.push('FocusDist: ' + caps.focusDistance.min + '-' + caps.focusDistance.max);
+      if (caps.zoom) info.push('Zoom: ' + caps.zoom.min + '-' + caps.zoom.max);
+      if (caps.torch !== undefined) info.push('Torch: ' + caps.torch);
+      console.log('Camera caps:', caps);
+      console.log('Camera info:', info.join(' | '));
+    }
+  }, 1000);
 
   // Czekaj na loadedmetadata - track ma capabilities dopiero wtedy
   let triedRefocus = false;
@@ -1456,19 +1483,28 @@ function liveQrTickJs() {
   // Pobierz dane piksli z canvas
   let imageData = ctx.getImageData(0, 0, size, size);
 
-  // Spróbuj ZXing - profesjonalna biblioteka Google
-  if (qrZxingReader) {
+  // Spróbuj ZXing - przez RGBLuminanceSource (zawsze dostępne w UMD)
+  if (typeof ZXing !== 'undefined' && ZXing.MultiFormatReader) {
     try {
-      // Stwórz luminance source z image data
-      let luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+      // Konwersja RGBA -> grayscale luminance (R+G+B average)
+      let rgba = imageData.data;
+      let luminance = new Uint8ClampedArray(size * size);
+      for (let i = 0, j = 0; i < rgba.length; i += 4, j++) {
+        luminance[j] = (rgba[i] + rgba[i+1] + rgba[i+2]) / 3;
+      }
+      let luminanceSource = new ZXing.RGBLuminanceSource(luminance, size, size);
       let binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
-      let result = qrZxingReader.decode(binaryBitmap);
+      let reader = new ZXing.MultiFormatReader();
+      let hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      let result = reader.decode(binaryBitmap, hints);
       if (result && result.getText) {
         let text = result.getText();
         if (text) { handleQrDecoded(text); return; }
       }
     } catch(e) {
-      // ZXing nie znalazł kodu - spróbuj jsQR jako fallback
+      // ZXing nie znalazł kodu - jsQR fallback
     }
   }
 
