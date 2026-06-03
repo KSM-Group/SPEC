@@ -1224,9 +1224,8 @@ function refocusLiveCamera(showToast, x, y) {
     // single-shot wymusza re-focus
     if (focusModes.indexOf('single-shot') >= 0) {
       constraints.push({ focusMode: 'single-shot' });
-    }
-    // potem continuous dla ciągłej ostrości
-    if (focusModes.indexOf('continuous') >= 0) {
+      // NIE nadpisuj single-shot przez continuous - inaczej focus skacze
+    } else if (focusModes.indexOf('continuous') >= 0) {
       constraints.push({ focusMode: 'continuous' });
     } else if (focusModes.indexOf('auto') >= 0) {
       constraints.push({ focusMode: 'auto' });
@@ -1333,8 +1332,11 @@ function enhanceLiveCameraFocus() {
 
   updateTorchButton();
 
-  // BEZ pętlowego refocus - kamera sama utrzymuje continuous focus
-  // Tylko initial setup i tap-to-focus na żądanie
+  // Pętlowy refocus co 2s - wymusza re-focus na środek
+  if (qrFocusTimer) clearInterval(qrFocusTimer);
+  qrFocusTimer = setInterval(function() {
+    if (qrStream) refocusLiveCamera(false, 0.5, 0.5);
+  }, 2000);
 
   // Tap-to-focus z dokładną pozycją
   video.onclick = function(e) {
