@@ -459,18 +459,7 @@ body {
   filter: contrast(1.15) saturate(1.05) brightness(1.0);
   -webkit-filter: contrast(1.15) saturate(1.05) brightness(1.0);
 }
-.qr-mode-btn {
-  background: rgba(255,255,255,.12);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.25);
-  border-radius: 18px;
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 600;
-}
-.qr-mode-btn:hover { background: rgba(255,255,255,.2); }
+
 .qr-scan-frame {
   position: absolute;
   left: 50%;
@@ -518,9 +507,10 @@ body {
 .qr-torch-btn.hidden { display: none; }
 </style>
 <meta http-equiv="Permissions-Policy" content="camera=(self)"/>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script type="module">
+import QrScanner from "https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.min.js";
+window.QrScanner = QrScanner;
+</script>
 </head>
 <body>
 
@@ -669,14 +659,12 @@ body {
   <div class="qr-scan-header">
     <button type="button" onclick="closeCam()">✕ Zamknij</button>
     <div class="qr-scan-title">Skanuj kod QR</div>
-    <button type="button" class="qr-mode-btn" id="qr-mode-btn" onclick="cycleQrMode()" title="Zmień skaner">⚙️ <span id="qr-mode-label">Auto</span></button>
     <button type="button" class="qr-torch-btn hidden" id="qr-torch-btn" onclick="toggleQrTorch()" title="Latarka">🔦</button>
   </div>
   <div id="qr-live-wrap">
     <div class="qr-scan-viewport">
       <video id="qr-video" autoplay playsinline muted webkit-playsinline></video>
       <canvas id="qr-canvas"></canvas>
-      <div id="qr-html5-container" style="display:none;width:100%;height:100%;"></div>
       <div class="qr-scan-frame" aria-hidden="true"></div>
     </div>
   </div>
@@ -1129,13 +1117,8 @@ function showScreen(name) {
 let qrStream = null;
 let qrScanRaf = 0;
 let qrScanHandled = false;
+let qrScannerInstance = null;
 let qrLiveStarting = false;
-let qrFocusTimer = 0;
-let qrLastScanTs = 0;
-let qrBarcodeDetector = null;
-let qrTorchOn = false;
-const QR_SCAN_MS = 50;
-const QR_DECODE_PX = 800;
 
 function setQrHint(text) {
   let el = document.getElementById('qr-scan-hint');
@@ -1146,550 +1129,108 @@ function isHttpsOk() {
   return window.isSecureContext === true;
 }
 
-function requestUserMedia(constraints) {
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    return navigator.mediaDevices.getUserMedia(constraints);
-  }
-  let legacy = navigator.getUserMedia || navigator.webkitGetUserMedia;
-  if (!legacy) return Promise.reject(new Error('Brak API kamery'));
-  return new Promise(function(resolve, reject) {
-    legacy.call(navigator, constraints, resolve, reject);
-  });
-}
-
-function buildCameraConstraints(deviceId) {
-  // Maksymalna jakość obrazu - 4K dla Samsung S24, mniej dla tanich
-  let video = {
-    width: { ideal: 3840, min: 1280 },
-    height: { ideal: 2160, min: 720 },
-    frameRate: { ideal: 30, min: 15 },
-    focusMode: { ideal: 'continuous' },
-    exposureMode: { ideal: 'continuous' },
-    whiteBalanceMode: { ideal: 'continuous' },
-    // Próba advanced focus - Samsung wspiera
-    advanced: [
-      { focusMode: 'continuous' },
-      { focusDistance: 0.1 } // bardzo blisko, 10cm
-    ]
-  };
-  if (deviceId) video.deviceId = { exact: deviceId };
-  else video.facingMode = { exact: 'environment' };
-  return { audio: false, video: video };
-}
-
-function pickBackCameraId() {
-  return navigator.mediaDevices.enumerateDevices().then(function(devices) {
-    let cams = devices.filter(function(d) { return d.kind === 'videoinput'; });
-    if (!cams.length) return null;
-    let back = cams.find(function(c) {
-      let l = (c.label || '').toLowerCase();
-      return /back|rear|tyl|environment|facing back/.test(l);
-    });
-    if (back) return back.deviceId;
-    return cams.length > 1 ? cams[cams.length - 1].deviceId : cams[0].deviceId;
-  }).catch(function() { return null; });
-}
-
-function getQrVideoTrack() {
-  if (qrStream) {
-    let t = qrStream.getVideoTracks();
-    if (t.length) return t[0];
-  }
-  let video = document.getElementById('qr-video');
-  if (video && video.srcObject) {
-    let t2 = video.srcObject.getVideoTracks();
-    if (t2.length) return t2[0];
-  }
-  return null;
-}
-
-function refocusLiveCamera(showToast, x, y) {
-  let track = getQrVideoTrack();
-  if (!track) return Promise.resolve();
-  let caps = {};
-  try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch(e) {}
-
-  let constraints = [];
-
-  // 1. Tap-to-focus point - jeśli kamera wspiera
-  if (typeof x === 'number' && typeof y === 'number') {
-    if (caps.pointsOfInterest) {
-      constraints.push({ pointsOfInterest: [{x: x, y: y}] });
-    }
-  }
-
-  // 2. Continuous focus mode - najpierw priorytet
-  let focusModes = caps.focusMode || [];
-  if (focusModes.length) {
-    // single-shot wymusza re-focus
-    if (focusModes.indexOf('single-shot') >= 0) {
-      constraints.push({ focusMode: 'single-shot' });
-      // NIE nadpisuj single-shot przez continuous - inaczej focus skacze
-    } else if (focusModes.indexOf('continuous') >= 0) {
-      constraints.push({ focusMode: 'continuous' });
-    } else if (focusModes.indexOf('auto') >= 0) {
-      constraints.push({ focusMode: 'auto' });
-    }
-  }
-
-  // 3. Manual focus distance - próbuj agresywnie, kilka prób
-  if (caps.focusDistance && typeof caps.focusDistance.min === 'number') {
-    let range = caps.focusDistance.max - caps.focusDistance.min;
-    // Najpierw bardzo blisko (5% zakresu = ~5-10cm), potem dalej
-    let fd1 = caps.focusDistance.min + range * 0.05;
-    let fd2 = caps.focusDistance.min + range * 0.15;
-    let fd3 = caps.focusDistance.min + range * 0.30;
-    constraints.push({ focusDistance: fd1 });
-    constraints.push({ focusDistance: fd2 });
-    constraints.push({ focusDistance: fd3 });
-  }
-
-  // 4. Exposure - DAJ KAMERZE auto-control, nie forsuj jasności (powoduje szum)
-  if (caps.exposureMode && caps.exposureMode.indexOf('continuous') >= 0) {
-    constraints.push({ exposureMode: 'continuous' });
-  }
-
-  // 5. White balance auto
-  if (caps.whiteBalanceMode && caps.whiteBalanceMode.indexOf('continuous') >= 0) {
-    constraints.push({ whiteBalanceMode: 'continuous' });
-  }
-
-  // 6. ISO - AUTO, nie wymuszaj wysokiego (powoduje śnieg/szum)
-  if (caps.iso && caps.iso.min) {
-    constraints.push({ iso: caps.iso.min }); // najniższe ISO = czysty obraz
-  }
-
-  // 7. Zoom - USUNIĘTE (Samsung S24 odpala wtedy ultra-wide kamerę = szum)
-  // Kamera sama wybierze odpowiedni zoom
-
-  // Aplikuj wszystkie constraints po kolei - jeśli któryś nie wspierany, idź dalej
-  let chain = Promise.resolve();
-  constraints.forEach(function(c) {
-    chain = chain.then(function() {
-      return track.applyConstraints({ advanced: [c] }).catch(function() {});
-    });
-  });
-
-  if (showToast) {
-    chain.then(function() { showEmpToast('Ustawiam ostrość…'); }).catch(function(){});
-  }
-  return chain;
-}
-
-function updateTorchButton() {
+function updateTorchButton(visible) {
   let btn = document.getElementById('qr-torch-btn');
-  let track = getQrVideoTrack();
-  if (!btn || !track) return;
-  let caps = track.getCapabilities ? track.getCapabilities() : {};
-  btn.classList.toggle('hidden', !caps.torch);
+  if (!btn) return;
+  if (visible) btn.classList.remove('hidden');
+  else btn.classList.add('hidden');
 }
 
 function toggleQrTorch() {
-  let track = getQrVideoTrack();
-  if (!track) return;
-  let caps = track.getCapabilities ? track.getCapabilities() : {};
-  if (!caps.torch) return;
-  qrTorchOn = !qrTorchOn;
-  track.applyConstraints({ advanced: [{ torch: qrTorchOn }] }).catch(function() {
-    qrTorchOn = false;
-    showEmpToast('Latarka niedostępna');
-  });
-}
-
-function enhanceLiveCameraFocus() {
-  let video = document.getElementById('qr-video');
-  if (!video || video.dataset.focusReady === '1') return;
-  video.dataset.focusReady = '1';
-  video.setAttribute('playsinline', 'true');
-  video.setAttribute('webkit-playsinline', 'true');
-
-  // Diagnostyka - co kamera obsługuje (na chwilę)
-  setTimeout(function() {
-    let track = getQrVideoTrack();
-    if (track && track.getCapabilities) {
-      let caps = track.getCapabilities();
-      let info = [];
-      if (caps.focusMode) info.push('Focus: ' + caps.focusMode.join(','));
-      if (caps.focusDistance) info.push('FocusDist: ' + caps.focusDistance.min + '-' + caps.focusDistance.max);
-      if (caps.zoom) info.push('Zoom: ' + caps.zoom.min + '-' + caps.zoom.max);
-      if (caps.torch !== undefined) info.push('Torch: ' + caps.torch);
-      console.log('Camera caps:', caps);
-      console.log('Camera info:', info.join(' | '));
+  if (!qrScannerInstance) return;
+  qrScannerInstance.hasFlash().then(function(hasFlash) {
+    if (!hasFlash) {
+      showEmpToast('Latarka niedostępna');
+      return;
     }
-  }, 1000);
-
-  // Czekaj na loadedmetadata - track ma capabilities dopiero wtedy
-  let triedRefocus = false;
-  let doInitialRefocus = function() {
-    if (triedRefocus) return;
-    triedRefocus = true;
-    refocusLiveCamera(false);
-    setTimeout(function() { refocusLiveCamera(false); }, 300);
-    setTimeout(function() { refocusLiveCamera(false); }, 800);
-  };
-  if (video.readyState >= 2) doInitialRefocus();
-  else video.addEventListener('loadedmetadata', doInitialRefocus, { once: true });
-
-  updateTorchButton();
-
-  // Pętlowy refocus co 2s - wymusza re-focus na środek
-  if (qrFocusTimer) clearInterval(qrFocusTimer);
-  qrFocusTimer = setInterval(function() {
-    if (qrStream) refocusLiveCamera(false, 0.5, 0.5);
-  }, 2000);
-
-  // Tap-to-focus z dokładną pozycją
-  video.onclick = function(e) {
-    let rect = video.getBoundingClientRect();
-    let x = (e.clientX - rect.left) / rect.width;
-    let y = (e.clientY - rect.top) / rect.height;
-    refocusLiveCamera(true, x, y);
-  };
-  video.ontouchend = function(e) {
-    if (e.changedTouches && e.changedTouches.length) {
-      let rect = video.getBoundingClientRect();
-      let t = e.changedTouches[0];
-      let x = (t.clientX - rect.left) / rect.width;
-      let y = (t.clientY - rect.top) / rect.height;
-      refocusLiveCamera(true, x, y);
-    }
-  };
-}
-
-// ZXing reader - profesjonalna biblioteka Google
-let qrZxingReader = null;
-// 3 tryby skanera: 'auto' (ZXing+jsQR), 'html5' (html5-qrcode), 'native' (BarcodeDetector)
-let QR_SCAN_MODE = localStorage.getItem('spec-qr-mode') || 'html5';
-let html5QrScanner = null;
-
-function cycleQrMode() {
-  let modes = ['auto', 'html5', 'native'];
-  let labels = { auto: 'Auto', html5: 'HTML5', native: 'Native' };
-  let idx = modes.indexOf(QR_SCAN_MODE);
-  QR_SCAN_MODE = modes[(idx + 1) % modes.length];
-  localStorage.setItem('spec-qr-mode', QR_SCAN_MODE);
-  document.getElementById('qr-mode-label').textContent = labels[QR_SCAN_MODE];
-  showEmpToast('Tryb: ' + labels[QR_SCAN_MODE] + ' — ponowne otwarcie skanera');
-  // Zatrzymaj obecny scanner i wymuś restart
-  stopLiveScanner();
-  setTimeout(function(){ openQrScanner(); }, 400);
-}
-
-function updateQrModeLabel() {
-  let labels = { auto: 'Auto', html5: 'HTML5', native: 'Native' };
-  let el = document.getElementById('qr-mode-label');
-  if (el) el.textContent = labels[QR_SCAN_MODE] || 'Auto';
-}
-
-function initQrBarcodeDetector() {
-  qrBarcodeDetector = null;
-  if ('BarcodeDetector' in window) {
-    BarcodeDetector.getSupportedFormats().then(function(formats) {
-      if (formats && formats.indexOf('qr_code') >= 0) {
-        qrBarcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-      }
-    }).catch(function() {});
-  }
-  // Inicjuj ZXing jako uniwersalny fallback (lepszy niż jsQR)
-  if (typeof ZXing !== 'undefined' && !qrZxingReader) {
-    try {
-      qrZxingReader = new ZXing.BrowserQRCodeReader();
-    } catch(e) {
-      console.warn('ZXing init:', e);
-    }
-  }
-}
-
-function attachQrStream(stream) {
-  let video = document.getElementById('qr-video');
-  qrStream = stream;
-  video.srcObject = stream;
-  video.muted = true;
-  video.playsInline = true;
-  let p = video.play();
-  if (p && p.catch) p.catch(function() {});
-  qrLiveStarting = false;
-  initQrBarcodeDetector();
-  // Opóźnij enhance - track potrzebuje czasu na załadowanie capabilities
-  setTimeout(function(){ enhanceLiveCameraFocus(); }, 500);
-  setQrHint('Kod w białej ramce · dotknij ekranu = ostrość');
-  runLiveQrLoop();
-}
-
-function stopLiveScanner() {
-  stopHtml5QrScanner();
-  if (qrScanRaf) {
-    cancelAnimationFrame(qrScanRaf);
-    qrScanRaf = 0;
-  }
-  if (qrFocusTimer) {
-    clearInterval(qrFocusTimer);
-    qrFocusTimer = 0;
-  }
-  qrBarcodeDetector = null;
-  qrTorchOn = false;
-  let torchBtn = document.getElementById('qr-torch-btn');
-  if (torchBtn) torchBtn.classList.add('hidden');
-
-  let video = document.getElementById('qr-video');
-  if (video) {
-    video.onclick = null;
-    delete video.dataset.focusReady;
-    try { video.pause(); } catch (e) {}
-    video.srcObject = null;
-  }
-  if (qrStream) {
-    qrStream.getTracks().forEach(function(t) { t.stop(); });
-    qrStream = null;
-  }
-}
-
-function startHtml5QrScanner() {
-  if (typeof Html5Qrcode === 'undefined') {
-    showEmpToast('HTML5 niedostępny — przełącz na Auto');
-    return;
-  }
-  qrLiveStarting = true;
-  stopLiveScanner();
-  setQrHint('Tryb HTML5: włączanie kamery…');
-
-  // Ukryj nasze video, pokaż container html5-qrcode
-  document.getElementById('qr-video').style.display = 'none';
-  let container = document.getElementById('qr-html5-container');
-  container.style.display = 'block';
-  container.innerHTML = '<div id="html5-qr-reader" style="width:100%;height:100%;"></div>';
-
-  try {
-    html5QrScanner = new Html5Qrcode('html5-qr-reader', { verbose: false });
-    let config = {
-      fps: 15,
-      qrbox: { width: 250, height: 250 },
-      aspectRatio: 1.0,
-      disableFlip: false,
-      videoConstraints: {
-        facingMode: 'environment',
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
-      }
-    };
-    html5QrScanner.start(
-      { facingMode: 'environment' },
-      config,
-      function(decodedText) {
-        handleQrDecoded(decodedText);
-      },
-      function() { /* skip errors per frame */ }
-    ).then(function() {
-      qrLiveStarting = false;
-      setQrHint('Tryb HTML5 · kod w ramce');
-    }).catch(function(err) {
-      qrLiveStarting = false;
-      console.error('HTML5 scanner error:', err);
-      showEmpToast('Błąd HTML5: ' + cameraErrorMessage(err));
-    });
-  } catch(e) {
-    qrLiveStarting = false;
-    showEmpToast('Błąd: ' + e.message);
-  }
-}
-
-function stopHtml5QrScanner() {
-  if (html5QrScanner) {
-    try {
-      html5QrScanner.stop().then(function() {
-        html5QrScanner.clear();
-        html5QrScanner = null;
-      }).catch(function() { html5QrScanner = null; });
-    } catch(e) { html5QrScanner = null; }
-  }
-  document.getElementById('qr-video').style.display = '';
-  document.getElementById('qr-html5-container').style.display = 'none';
+    qrScannerInstance.isFlashOn() 
+      ? qrScannerInstance.turnFlashOff() 
+      : qrScannerInstance.turnFlashOn();
+  }).catch(function(){});
 }
 
 function startLiveScanner() {
-  if (qrLiveStarting) return;
+  if (qrLiveStarting || qrScannerInstance) return;
   if (!isHttpsOk()) {
     showEmpToast('Wymagane HTTPS (GitHub Pages)');
     return;
   }
-
-  updateQrModeLabel();
-
-  // Tryb HTML5-qrcode - własna logika
-  if (QR_SCAN_MODE === 'html5') {
-    startHtml5QrScanner();
+  if (typeof QrScanner === 'undefined') {
+    showEmpToast('Skaner się ładuje, spróbuj za chwilę');
+    setTimeout(startLiveScanner, 800);
     return;
   }
 
   qrLiveStarting = true;
-  stopLiveScanner();
   setQrHint('Włączanie kamery…');
 
-  requestUserMedia({ audio: false, video: { facingMode: 'environment' } })
-    .then(function(stream) {
-      return pickBackCameraId().then(function(deviceId) {
-        if (!deviceId) return stream;
-        let cur = stream.getVideoTracks()[0];
-        let curId = cur && cur.getSettings ? cur.getSettings().deviceId : '';
-        if (curId === deviceId) return stream;
-        stream.getTracks().forEach(function(t) { t.stop(); });
-        return requestUserMedia(buildCameraConstraints(deviceId));
-      });
-    })
-    .then(attachQrStream)
-    .catch(function(err) {
-      console.warn('Kamera tylna:', err);
-      return requestUserMedia(buildCameraConstraints(null));
-    })
-    .then(function(stream) {
-      if (!qrStream && stream) attachQrStream(stream);
-    })
-    .catch(function(err) {
-      console.warn('Kamera domyślna:', err);
-      return requestUserMedia({ audio: false, video: true });
-    })
-    .then(function(stream) {
-      if (!qrStream && stream) attachQrStream(stream);
-    })
-    .catch(function(err) {
-      qrLiveStarting = false;
-      console.error('Kamera:', err);
-      showEmpToast(cameraErrorMessage(err));
-      setQrHint(cameraErrorMessage(err));
-    });
-}
-
-function liveQrTickJs() {
   let video = document.getElementById('qr-video');
-  if (!video || !video.videoWidth) return;
+  if (!video) { qrLiveStarting = false; return; }
 
-  let canvas = document.getElementById('qr-canvas');
-  let ctx = canvas.getContext('2d', { willReadFrequently: true });
-  let vw = video.videoWidth;
-  let vh = video.videoHeight;
-  let crop = Math.floor(Math.min(vw, vh) * 0.95);
-  let sx = Math.floor((vw - crop) / 2);
-  let sy = Math.floor((vh - crop) / 2);
-  let size = QR_DECODE_PX;
-
-  canvas.width = size;
-  canvas.height = size;
-  // Filter dla lepszego dekodowania (nie wpływa na widok)
-  ctx.filter = 'contrast(1.4) brightness(1.05)';
-  ctx.drawImage(video, sx, sy, crop, crop, 0, 0, size, size);
-  ctx.filter = 'none';
-
-  // Pobierz dane piksli z canvas
-  let imageData = ctx.getImageData(0, 0, size, size);
-
-  // Spróbuj ZXing - przez RGBLuminanceSource (zawsze dostępne w UMD)
-  if (typeof ZXing !== 'undefined' && ZXing.MultiFormatReader) {
-    try {
-      // Konwersja RGBA -> grayscale luminance (R+G+B average)
-      let rgba = imageData.data;
-      let luminance = new Uint8ClampedArray(size * size);
-      for (let i = 0, j = 0; i < rgba.length; i += 4, j++) {
-        luminance[j] = (rgba[i] + rgba[i+1] + rgba[i+2]) / 3;
-      }
-      let luminanceSource = new ZXing.RGBLuminanceSource(luminance, size, size);
-      let binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
-      let reader = new ZXing.MultiFormatReader();
-      let hints = new Map();
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      let result = reader.decode(binaryBitmap, hints);
-      if (result && result.getText) {
-        let text = result.getText();
-        if (text) { handleQrDecoded(text); return; }
-      }
-    } catch(e) {
-      // ZXing nie znalazł kodu - jsQR fallback
-    }
-  }
-
-  // Fallback: jsQR
-  if (typeof jsQR !== 'undefined') {
-    let code = jsQR(imageData.data, size, size, { inversionAttempts: 'attemptBoth' });
-    if (code && code.data) handleQrDecoded(code.data);
-  }
-}
-
-function liveQrTick() {
-  if (qrScanHandled || !qrStream) return;
-
-  let video = document.getElementById('qr-video');
-  if (!video || !video.videoWidth) return;
-
-  // Tryb 'native' - BarcodeDetector (Google ML Kit), fallback ZXing
-  if (QR_SCAN_MODE === 'native') {
-    if (qrBarcodeDetector) {
-      qrBarcodeDetector.detect(video).then(function(codes) {
-        if (codes && codes.length && codes[0].rawValue) {
-          handleQrDecoded(codes[0].rawValue);
+  try {
+    qrScannerInstance = new QrScanner(
+      video,
+      function(result) {
+        let text = result && result.data ? result.data : result;
+        if (text) handleQrDecoded(text);
+      },
+      {
+        returnDetailedScanResult: true,
+        highlightScanRegion: false,
+        highlightCodeOutline: false,
+        preferredCamera: 'environment',
+        maxScansPerSecond: 10,
+        calculateScanRegion: function(video) {
+          let smallerDim = Math.min(video.videoWidth, video.videoHeight);
+          let scanRegionSize = Math.round(smallerDim * 0.7);
+          return {
+            x: Math.round((video.videoWidth - scanRegionSize) / 2),
+            y: Math.round((video.videoHeight - scanRegionSize) / 2),
+            width: scanRegionSize,
+            height: scanRegionSize,
+          };
         }
-      }).catch(function() {
-        // BarcodeDetector zawiódł na tym kodzie - spróbuj ZXing
-        liveQrTickJs();
-      });
-    } else {
-      // BarcodeDetector niedostępny - użyj ZXing
-      liveQrTickJs();
-    }
-    return;
-  }
-
-  // Tryb 'auto' - BarcodeDetector → ZXing → jsQR
-  if (qrBarcodeDetector) {
-    qrBarcodeDetector.detect(video).then(function(codes) {
-      if (codes && codes.length && codes[0].rawValue) {
-        handleQrDecoded(codes[0].rawValue);
       }
-    }).catch(function() {
-      liveQrTickJs();
+    );
+
+    qrScannerInstance.start().then(function() {
+      qrLiveStarting = false;
+      setQrHint('Kod w białej ramce');
+      qrScannerInstance.hasFlash().then(function(hasFlash) {
+        updateTorchButton(hasFlash);
+      }).catch(function() {});
+    }).catch(function(err) {
+      qrLiveStarting = false;
+      qrScannerInstance = null;
+      console.error('Scanner error:', err);
+      showEmpToast('Błąd kamery: ' + (err.message || err));
     });
-    return;
+  } catch(e) {
+    qrLiveStarting = false;
+    qrScannerInstance = null;
+    showEmpToast('Błąd: ' + e.message);
   }
-  liveQrTickJs();
 }
 
-function runLiveQrLoop() {
-  if (!qrStream || qrScanHandled) return;
-  let now = performance.now();
-  if (now - qrLastScanTs >= QR_SCAN_MS) {
-    qrLastScanTs = now;
-    liveQrTick();
+function stopLiveScanner() {
+  if (qrScannerInstance) {
+    try {
+      qrScannerInstance.stop();
+      qrScannerInstance.destroy();
+    } catch(e) {}
+    qrScannerInstance = null;
   }
-  qrScanRaf = requestAnimationFrame(runLiveQrLoop);
+  qrLiveStarting = false;
 }
 
 function openQrScanner() {
-  if (!isHttpsOk()) {
-    showEmpToast('Otwórz przez HTTPS, nie plik z dysku');
-    return;
-  }
   qrScanHandled = false;
-  stopLiveScanner();
-
   let overlay = document.getElementById('qr-reader-overlay');
+  if (!overlay) return;
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
-  void overlay.offsetHeight;
-
-  requestAnimationFrame(function() {
-    requestAnimationFrame(startLiveScanner);
-  });
-}
-
-function cameraErrorMessage(err) {
-  let msg = (err && err.message) ? String(err.message) : '';
-  let name = err && err.name ? err.name : '';
-  if (name === 'NotAllowedError' || /permission/i.test(msg)) {
-    return 'Zezwól na kamerę w ustawieniach przeglądarki';
-  }
-  if (name === 'NotFoundError') return 'Nie znaleziono kamery w urządzeniu';
-  if (name === 'NotReadableError') return 'Kamera używana przez inną aplikację';
-  if (/secure/i.test(msg)) return 'Otwórz stronę przez HTTPS, nie z pliku na dysku';
-  return 'Nie udało się uruchomić kamery — odśwież stronę';
+  setQrHint('Włączanie kamery…');
+  requestAnimationFrame(startLiveScanner);
 }
 
 function closeCam() {
