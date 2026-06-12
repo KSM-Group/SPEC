@@ -1179,15 +1179,17 @@ function startLiveScanner() {
         highlightScanRegion: false,
         highlightCodeOutline: false,
         preferredCamera: 'environment',
-        maxScansPerSecond: 10,
+        maxScansPerSecond: 15,
         calculateScanRegion: function(video) {
           let smallerDim = Math.min(video.videoWidth, video.videoHeight);
-          let scanRegionSize = Math.round(smallerDim * 0.7);
+          let scanRegionSize = Math.round(smallerDim * 0.8);
           return {
             x: Math.round((video.videoWidth - scanRegionSize) / 2),
             y: Math.round((video.videoHeight - scanRegionSize) / 2),
             width: scanRegionSize,
             height: scanRegionSize,
+            downScaledWidth: 400,
+            downScaledHeight: 400
           };
         }
       }
@@ -1195,10 +1197,37 @@ function startLiveScanner() {
 
     qrScannerInstance.start().then(function() {
       qrLiveStarting = false;
-      setQrHint('Kod w białej ramce');
+      setQrHint('Kod w białej ramce · dotknij = ostrość');
       qrScannerInstance.hasFlash().then(function(hasFlash) {
         updateTorchButton(hasFlash);
       }).catch(function() {});
+
+      // Wymusz continuous focus na track + tap-to-focus
+      setTimeout(function() {
+        let stream = video.srcObject;
+        if (!stream) return;
+        let track = stream.getVideoTracks()[0];
+        if (!track) return;
+        let caps = track.getCapabilities ? track.getCapabilities() : {};
+        let modes = caps.focusMode || [];
+        if (modes.indexOf('continuous') >= 0) {
+          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function(){});
+        }
+        // Tap-to-focus
+        video.onclick = function(e) {
+          if (modes.indexOf('single-shot') >= 0) {
+            let rect = video.getBoundingClientRect();
+            let x = (e.clientX - rect.left) / rect.width;
+            let y = (e.clientY - rect.top) / rect.height;
+            let advanced = [{ focusMode: 'single-shot' }];
+            if (caps.pointsOfInterest) {
+              advanced.push({ pointsOfInterest: [{x: x, y: y}] });
+            }
+            track.applyConstraints({ advanced: advanced }).catch(function(){});
+            showEmpToast('Ostrzenie…');
+          }
+        };
+      }, 500);
     }).catch(function(err) {
       qrLiveStarting = false;
       qrScannerInstance = null;
