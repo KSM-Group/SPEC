@@ -478,7 +478,7 @@ function showAdmin(email) {
   document.getElementById('today-date-label').textContent = now.toLocaleDateString('pl-PL');
   document.getElementById('report-date-label').textContent = now.toLocaleDateString('pl-PL', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
   loadData();
-  setInterval(loadData, 60000);
+  setInterval(loadData, 10000);
 }
 // ── window.onload zastąpiony przez DOMContentLoaded powyżej ──────
 
