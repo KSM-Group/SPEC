@@ -10,6 +10,55 @@
 <link rel="manifest" href="manifest.json"/>
 <link rel="apple-touch-icon" href="logo.png"/>
 <title>SPEC — Pracownik</title>
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="./manifest.json"/>
+<meta name="theme-color" content="#3a6fc4"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="SPEC"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%233a6fc4'/%3E%3Ctext x='96' y='124' text-anchor='middle' font-size='80' font-weight='800' font-family='Arial' fill='white'%3ES%3C/text%3E%3C/svg%3E"/>
+
+<!-- Service Worker registration + Install Prompt -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./sw.js').catch(function(err) {
+      console.log('SW reg failed:', err);
+    });
+  });
+}
+
+// PWA Install Prompt
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Pokaż przycisk instalacji
+  setTimeout(function() {
+    let btn = document.getElementById('pwa-install-btn');
+    if (btn) btn.style.display = 'flex';
+  }, 1000);
+});
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function(choice) {
+    if (choice.outcome === 'accepted') {
+      let btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'none';
+    }
+    deferredPrompt = null;
+  });
+}
+
+window.addEventListener('appinstalled', function() {
+  let btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.style.display = 'none';
+});
+</script>
 <style>
 :root {
   --bg: #f0f4ff;
@@ -513,6 +562,9 @@ window.QrScanner = QrScanner;
 </script>
 </head>
 <body>
+
+<!-- PWA Install Button - pokazywany gdy aplikacja MOŻE być zainstalowana -->
+<button id="pwa-install-btn" onclick="installPWA()" style="display:none;position:fixed;bottom:80px;right:16px;z-index:9999;background:#3a6fc4;color:#fff;border:none;border-radius:24px;padding:12px 20px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(58,111,196,.4);cursor:pointer;align-items:center;gap:8px;font-family:inherit;">📲 Zainstaluj aplikację</button>
 
 <!-- LOGIN -->
 <div class="screen active" id="screen-login">
@@ -1094,17 +1146,33 @@ function loadTodayState() {
 
 // ── GOOGLE SYNC ───────────────────────────────────────────────
 async function syncToGoogle(event) {
-  try {
-    let cId = SECP_CLIENT_ID || localStorage.getItem('secp-client-id') || 'default';
-    let data = await sbGet(cId) || {};
-    if (!data.attendance) data.attendance = [];
-    data.attendance.push({
-      employee: currentEmployee ? currentEmployee.name : '?',
-      ...event,
-      date: new Date().toISOString().slice(0,10)
-    });
-    await sbSet(cId, data);
-  } catch(e) { console.log('Sync error:', e); }
+  let cId = SECP_CLIENT_ID || localStorage.getItem('secp-client-id') || 'default';
+  let entry = {
+    employee: currentEmployee ? currentEmployee.name : '?',
+    ...event,
+    date: new Date().toISOString().slice(0,10)
+  };
+  // Retry do 3 razy w razie race condition
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      let data = await sbGet(cId) || {};
+      if (!data.attendance) data.attendance = [];
+      // Sprawdź czy nie ma już tego samego wpisu (zabezpieczenie przed duplikatem)
+      let exists = data.attendance.some(function(a) {
+        return a.employee === entry.employee 
+          && a.action === entry.action 
+          && a.time === entry.time 
+          && a.date === entry.date;
+      });
+      if (exists) return; // Już zapisany, pomijam
+      data.attendance.push(entry);
+      await sbSet(cId, data);
+      return; // Sukces
+    } catch(e) {
+      console.log('Sync error attempt ' + attempt + ':', e);
+      if (attempt < 2) await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
 }
 
 // ── SCREENS ───────────────────────────────────────────────────
@@ -1202,28 +1270,76 @@ function startLiveScanner() {
         updateTorchButton(hasFlash);
       }).catch(function() {});
 
-      // Wymusz continuous focus na track + tap-to-focus
+      // Wymusz NAJLEPSZE możliwe ustawienia kamery
       setTimeout(function() {
         let stream = video.srcObject;
         if (!stream) return;
         let track = stream.getVideoTracks()[0];
         if (!track) return;
         let caps = track.getCapabilities ? track.getCapabilities() : {};
+        let advanced = [];
+
+        // 1. Najlepszy tryb focus
         let modes = caps.focusMode || [];
         if (modes.indexOf('continuous') >= 0) {
-          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function(){});
+          advanced.push({ focusMode: 'continuous' });
+        } else if (modes.indexOf('auto') >= 0) {
+          advanced.push({ focusMode: 'auto' });
         }
-        // Tap-to-focus
+
+        // 2. Auto-ekspozycja
+        let expModes = caps.exposureMode || [];
+        if (expModes.indexOf('continuous') >= 0) {
+          advanced.push({ exposureMode: 'continuous' });
+        }
+
+        // 3. Auto white balance
+        let wbModes = caps.whiteBalanceMode || [];
+        if (wbModes.indexOf('continuous') >= 0) {
+          advanced.push({ whiteBalanceMode: 'continuous' });
+        }
+
+        // 4. ISO minimum - zero szumu
+        if (caps.iso && typeof caps.iso.min === 'number') {
+          advanced.push({ iso: caps.iso.min });
+        }
+
+        // 5. Wyłącz HDR (powoduje szum przy ruchu)
+        if (caps.hdr !== undefined) {
+          advanced.push({ hdr: false });
+        }
+
+        // Aplikuj wszystkie po kolei (każdy w try-catch)
+        let chain = Promise.resolve();
+        advanced.forEach(function(c) {
+          chain = chain.then(function() {
+            return track.applyConstraints({ advanced: [c] }).catch(function(){});
+          });
+        });
+
+        // Tap-to-focus z point-of-interest
         video.onclick = function(e) {
+          let advancedTap = [];
           if (modes.indexOf('single-shot') >= 0) {
+            advancedTap.push({ focusMode: 'single-shot' });
+          }
+          if (caps.pointsOfInterest) {
             let rect = video.getBoundingClientRect();
             let x = (e.clientX - rect.left) / rect.width;
             let y = (e.clientY - rect.top) / rect.height;
-            let advanced = [{ focusMode: 'single-shot' }];
-            if (caps.pointsOfInterest) {
-              advanced.push({ pointsOfInterest: [{x: x, y: y}] });
-            }
-            track.applyConstraints({ advanced: advanced }).catch(function(){});
+            advancedTap.push({ pointsOfInterest: [{x: x, y: y}] });
+          }
+          if (advancedTap.length) {
+            track.applyConstraints({ advanced: advancedTap })
+              .then(function() {
+                // Po single-shot wróć do continuous
+                setTimeout(function() {
+                  if (modes.indexOf('continuous') >= 0) {
+                    track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function(){});
+                  }
+                }, 800);
+              })
+              .catch(function(){});
             showEmpToast('Ostrzenie…');
           }
         };
