@@ -1204,19 +1204,6 @@ function updateTorchButton(visible) {
   else btn.classList.add('hidden');
 }
 
-function toggleQrTorch() {
-  if (!qrScannerInstance) return;
-  qrScannerInstance.hasFlash().then(function(hasFlash) {
-    if (!hasFlash) {
-      showEmpToast('Latarka niedostępna');
-      return;
-    }
-    qrScannerInstance.isFlashOn() 
-      ? qrScannerInstance.turnFlashOff() 
-      : qrScannerInstance.turnFlashOn();
-  }).catch(function(){});
-}
-
 function startLiveScanner() {
   if (qrLiveStarting || qrScannerInstance) return;
   if (!isHttpsOk()) {
@@ -1235,137 +1222,176 @@ function startLiveScanner() {
   let video = document.getElementById('qr-video');
   if (!video) { qrLiveStarting = false; return; }
 
-  try {
-    qrScannerInstance = new QrScanner(
-      video,
-      function(result) {
-        let text = result && result.data ? result.data : result;
-        if (text) handleQrDecoded(text);
-      },
-      {
-        returnDetailedScanResult: true,
-        highlightScanRegion: false,
-        highlightCodeOutline: false,
-        preferredCamera: 'environment',
-        maxScansPerSecond: 15,
-        calculateScanRegion: function(video) {
-          let smallerDim = Math.min(video.videoWidth, video.videoHeight);
-          let scanRegionSize = Math.round(smallerDim * 0.8);
-          return {
-            x: Math.round((video.videoWidth - scanRegionSize) / 2),
-            y: Math.round((video.videoHeight - scanRegionSize) / 2),
-            width: scanRegionSize,
-            height: scanRegionSize,
-            downScaledWidth: 400,
-            downScaledHeight: 400
-          };
-        }
-      }
-    );
+  // Najpierw uruchom własny stream w MAKSYMALNEJ rozdzielczości (jak Aparat Samsung)
+  let constraints = {
+    audio: false,
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 3840 },    // 4K
+      height: { ideal: 2160 },
+      frameRate: { ideal: 30 },
+      focusMode: { ideal: 'continuous' },
+      exposureMode: { ideal: 'continuous' },
+      whiteBalanceMode: { ideal: 'continuous' }
+    }
+  };
 
-    qrScannerInstance.start().then(function() {
-      qrLiveStarting = false;
-      setQrHint('Kod w białej ramce · dotknij = ostrość');
-      qrScannerInstance.hasFlash().then(function(hasFlash) {
-        updateTorchButton(hasFlash);
-      }).catch(function() {});
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+    video.srcObject = stream;
+    video.setAttribute('playsinline', 'true');
+    let track = stream.getVideoTracks()[0];
+    let settings = track.getSettings ? track.getSettings() : {};
+    console.log('Camera rezolucja:', settings.width, 'x', settings.height);
 
-      // Wymusz NAJLEPSZE możliwe ustawienia kamery
-      setTimeout(function() {
-        let stream = video.srcObject;
-        if (!stream) return;
-        let track = stream.getVideoTracks()[0];
-        if (!track) return;
-        let caps = track.getCapabilities ? track.getCapabilities() : {};
-        let advanced = [];
+    // Stosuj zaawansowane ustawienia hardware kamery
+    let caps = track.getCapabilities ? track.getCapabilities() : {};
+    let advanced = [];
+    let modes = caps.focusMode || [];
+    if (modes.indexOf('continuous') >= 0) advanced.push({ focusMode: 'continuous' });
+    else if (modes.indexOf('auto') >= 0) advanced.push({ focusMode: 'auto' });
+    if (caps.exposureMode && caps.exposureMode.indexOf('continuous') >= 0) advanced.push({ exposureMode: 'continuous' });
+    if (caps.whiteBalanceMode && caps.whiteBalanceMode.indexOf('continuous') >= 0) advanced.push({ whiteBalanceMode: 'continuous' });
+    if (caps.iso && caps.iso.min) advanced.push({ iso: caps.iso.min });
+    
+    let chain = Promise.resolve();
+    advanced.forEach(function(c) {
+      chain = chain.then(function() {
+        return track.applyConstraints({ advanced: [c] }).catch(function(){});
+      });
+    });
 
-        // 1. Najlepszy tryb focus
-        let modes = caps.focusMode || [];
-        if (modes.indexOf('continuous') >= 0) {
-          advanced.push({ focusMode: 'continuous' });
-        } else if (modes.indexOf('auto') >= 0) {
-          advanced.push({ focusMode: 'auto' });
-        }
-
-        // 2. Auto-ekspozycja
-        let expModes = caps.exposureMode || [];
-        if (expModes.indexOf('continuous') >= 0) {
-          advanced.push({ exposureMode: 'continuous' });
-        }
-
-        // 3. Auto white balance
-        let wbModes = caps.whiteBalanceMode || [];
-        if (wbModes.indexOf('continuous') >= 0) {
-          advanced.push({ whiteBalanceMode: 'continuous' });
-        }
-
-        // 4. ISO minimum - zero szumu
-        if (caps.iso && typeof caps.iso.min === 'number') {
-          advanced.push({ iso: caps.iso.min });
-        }
-
-        // 5. Wyłącz HDR (powoduje szum przy ruchu)
-        if (caps.hdr !== undefined) {
-          advanced.push({ hdr: false });
-        }
-
-        // Aplikuj wszystkie po kolei (każdy w try-catch)
-        let chain = Promise.resolve();
-        advanced.forEach(function(c) {
-          chain = chain.then(function() {
-            return track.applyConstraints({ advanced: [c] }).catch(function(){});
-          });
-        });
-
-        // Tap-to-focus z point-of-interest
-        video.onclick = function(e) {
-          let advancedTap = [];
-          if (modes.indexOf('single-shot') >= 0) {
-            advancedTap.push({ focusMode: 'single-shot' });
+    // Inicjuj QrScanner na istniejącym video stream
+    try {
+      qrScannerInstance = new QrScanner(
+        video,
+        function(result) {
+          let text = result && result.data ? result.data : result;
+          if (text) handleQrDecoded(text);
+        },
+        {
+          returnDetailedScanResult: true,
+          highlightScanRegion: false,
+          highlightCodeOutline: false,
+          maxScansPerSecond: 25,
+          calculateScanRegion: function(v) {
+            let smallerDim = Math.min(v.videoWidth, v.videoHeight);
+            let scanRegionSize = Math.round(smallerDim * 0.7);
+            return {
+              x: Math.round((v.videoWidth - scanRegionSize) / 2),
+              y: Math.round((v.videoHeight - scanRegionSize) / 2),
+              width: scanRegionSize,
+              height: scanRegionSize,
+              downScaledWidth: 800,   // Większa rozdzielczość dekodowania
+              downScaledHeight: 800
+            };
           }
-          if (caps.pointsOfInterest) {
-            let rect = video.getBoundingClientRect();
-            let x = (e.clientX - rect.left) / rect.width;
-            let y = (e.clientY - rect.top) / rect.height;
-            advancedTap.push({ pointsOfInterest: [{x: x, y: y}] });
-          }
-          if (advancedTap.length) {
-            track.applyConstraints({ advanced: advancedTap })
-              .then(function() {
-                // Po single-shot wróć do continuous
-                setTimeout(function() {
-                  if (modes.indexOf('continuous') >= 0) {
-                    track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function(){});
-                  }
-                }, 800);
-              })
-              .catch(function(){});
-            showEmpToast('Ostrzenie…');
-          }
-        };
-      }, 500);
-    }).catch(function(err) {
+        }
+      );
+
+      qrScannerInstance.$canvas = document.createElement('canvas');
+      qrScannerInstance._active = true;
+
+      // Uruchom pętlę dekodowania ręcznie na naszym streamie
+      let scanLoop = function() {
+        if (!qrScannerInstance || !qrScannerInstance._active) return;
+        if (qrScanHandled) return;
+        try {
+          QrScanner.scanImage(video, { returnDetailedScanResult: true })
+            .then(function(result) {
+              if (result && result.data && !qrScanHandled) {
+                handleQrDecoded(result.data);
+              }
+            })
+            .catch(function(){})
+            .finally(function() {
+              if (qrScannerInstance && qrScannerInstance._active) {
+                setTimeout(scanLoop, 40);  // ~25 razy/sek
+              }
+            });
+        } catch(e) {
+          setTimeout(scanLoop, 100);
+        }
+      };
+
+      video.play().then(function() {
+        qrLiveStarting = false;
+        setQrHint('Kod w białej ramce · dotknij = ostrość');
+        if (caps.torch) updateTorchButton(true);
+        scanLoop();
+      }).catch(function() {
+        qrLiveStarting = false;
+        scanLoop();
+      });
+
+      // Tap-to-focus
+      video.onclick = function(e) {
+        let modesT = caps.focusMode || [];
+        let advT = [];
+        if (modesT.indexOf('single-shot') >= 0) advT.push({ focusMode: 'single-shot' });
+        if (caps.pointsOfInterest) {
+          let rect = video.getBoundingClientRect();
+          let x = (e.clientX - rect.left) / rect.width;
+          let y = (e.clientY - rect.top) / rect.height;
+          advT.push({ pointsOfInterest: [{x: x, y: y}] });
+        }
+        if (advT.length) {
+          track.applyConstraints({ advanced: advT })
+            .then(function() {
+              setTimeout(function() {
+                if (modesT.indexOf('continuous') >= 0) {
+                  track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function(){});
+                }
+              }, 800);
+            })
+            .catch(function(){});
+          showEmpToast('Ostrzenie…');
+        }
+      };
+
+      // Torch przez nasz track
+      window.__qrTrack = track;
+
+    } catch(e) {
       qrLiveStarting = false;
       qrScannerInstance = null;
-      console.error('Scanner error:', err);
-      showEmpToast('Błąd kamery: ' + (err.message || err));
-    });
-  } catch(e) {
+      showEmpToast('Błąd: ' + e.message);
+    }
+  }).catch(function(err) {
     qrLiveStarting = false;
-    qrScannerInstance = null;
-    showEmpToast('Błąd: ' + e.message);
-  }
+    showEmpToast('Brak dostępu do kamery: ' + (err.message || err.name));
+  });
 }
 
 function stopLiveScanner() {
   if (qrScannerInstance) {
     try {
-      qrScannerInstance.stop();
-      qrScannerInstance.destroy();
+      qrScannerInstance._active = false;
+      qrScannerInstance.destroy && qrScannerInstance.destroy();
     } catch(e) {}
     qrScannerInstance = null;
   }
+  // Zatrzymaj własny stream
+  let video = document.getElementById('qr-video');
+  if (video && video.srcObject) {
+    try {
+      video.srcObject.getTracks().forEach(function(t) { t.stop(); });
+    } catch(e) {}
+    video.srcObject = null;
+  }
+  window.__qrTrack = null;
   qrLiveStarting = false;
+}
+
+function toggleQrTorch() {
+  let track = window.__qrTrack;
+  if (!track) return;
+  let caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (!caps.torch) {
+    showEmpToast('Latarka niedostępna');
+    return;
+  }
+  let settings = track.getSettings ? track.getSettings() : {};
+  track.applyConstraints({ advanced: [{ torch: !settings.torch }] }).catch(function(){});
 }
 
 function openQrScanner() {
