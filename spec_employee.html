@@ -1222,21 +1222,52 @@ function startLiveScanner() {
   let video = document.getElementById('qr-video');
   if (!video) { qrLiveStarting = false; return; }
 
-  // Najpierw uruchom własny stream w MAKSYMALNEJ rozdzielczości (jak Aparat Samsung)
-  let constraints = {
-    audio: false,
-    video: {
-      facingMode: { ideal: 'environment' },
-      width: { ideal: 3840 },    // 4K
-      height: { ideal: 2160 },
-      frameRate: { ideal: 30 },
+  // Najpierw enumeruj kamery żeby znaleźć główną tylną (nie ultra-wide / tele)
+  function pickMainBackCamera() {
+    return navigator.mediaDevices.enumerateDevices().then(function(devices) {
+      let cams = devices.filter(function(d) { return d.kind === 'videoinput'; });
+      console.log('Dostępne kamery:', cams.map(function(c) { return c.label; }));
+      
+      // Próbuj znaleźć "Camera 0" lub "back" które są zwykle główną kamerą
+      // Samsung: "camera2 0, facing back" = główna tylna
+      let main = cams.find(function(c) {
+        let l = c.label.toLowerCase();
+        return (l.includes('back') || l.includes('rear') || l.includes('environment')) 
+          && !l.includes('wide') && !l.includes('tele') && !l.includes('ultra')
+          && !l.includes('macro') && !l.includes('depth');
+      });
+      
+      // Fallback: pierwsza tylna kamera
+      if (!main) {
+        main = cams.find(function(c) {
+          let l = c.label.toLowerCase();
+          return l.includes('back') || l.includes('rear');
+        });
+      }
+      
+      // Ostatecznie: pierwsza z facingMode environment (browser sam wybiera)
+      return main ? main.deviceId : null;
+    }).catch(function() { return null; });
+  }
+
+  pickMainBackCamera().then(function(deviceId) {
+    let videoConstraints = {
+      width: { ideal: 2560, min: 1280 },   // 1440p z fallback do 720p (iOS)
+      height: { ideal: 1440, min: 720 },
+      frameRate: { ideal: 30, min: 15 },
       focusMode: { ideal: 'continuous' },
       exposureMode: { ideal: 'continuous' },
       whiteBalanceMode: { ideal: 'continuous' }
+    };
+    if (deviceId) {
+      videoConstraints.deviceId = { exact: deviceId };
+      console.log('Wybrana kamera (deviceId):', deviceId);
+    } else {
+      videoConstraints.facingMode = { ideal: 'environment' };
     }
-  };
+    let constraints = { audio: false, video: videoConstraints };
 
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+    navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
     video.srcObject = stream;
     video.setAttribute('playsinline', 'true');
     let track = stream.getVideoTracks()[0];
@@ -1360,6 +1391,7 @@ function startLiveScanner() {
     qrLiveStarting = false;
     showEmpToast('Brak dostępu do kamery: ' + (err.message || err.name));
   });
+  }); // koniec pickMainBackCamera.then
 }
 
 function stopLiveScanner() {
