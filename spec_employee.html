@@ -1428,12 +1428,59 @@ function toggleQrTorch() {
 
 function openQrScanner() {
   qrScanHandled = false;
-  let overlay = document.getElementById('qr-reader-overlay');
-  if (!overlay) return;
-  overlay.classList.add('open');
-  overlay.setAttribute('aria-hidden', 'false');
-  setQrHint('Włączanie kamery…');
-  requestAnimationFrame(startLiveScanner);
+  
+  // Stwórz ukryty input file z capture - otwiera natywny aparat telefonu
+  let input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';  // tylna kamera, natywny aparat
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  
+  input.onchange = function(e) {
+    let file = e.target.files && e.target.files[0];
+    if (!file) {
+      document.body.removeChild(input);
+      return;
+    }
+    
+    // Pokaż loading
+    showEmpToast('Analizuję zdjęcie…');
+    
+    // Załaduj obraz i dekoduj przez QrScanner
+    let img = new Image();
+    img.onload = function() {
+      // Dekoduj przez nimiq QrScanner (najlepszy dla statycznych obrazów)
+      if (typeof QrScanner !== 'undefined') {
+        QrScanner.scanImage(img, { returnDetailedScanResult: true })
+          .then(function(result) {
+            let text = result && result.data ? result.data : result;
+            if (text) {
+              handleQrDecoded(text);
+            } else {
+              showEmpToast('Nie znaleziono kodu QR — spróbuj ponownie');
+            }
+            document.body.removeChild(input);
+          })
+          .catch(function(err) {
+            showEmpToast('Nie odczytano kodu — zrób ostrzejsze zdjęcie');
+            console.log('QR decode error:', err);
+            document.body.removeChild(input);
+          });
+      } else {
+        showEmpToast('Skaner się ładuje — spróbuj za chwilę');
+        document.body.removeChild(input);
+      }
+    };
+    img.onerror = function() {
+      showEmpToast('Błąd ładowania zdjęcia');
+      document.body.removeChild(input);
+    };
+    img.src = URL.createObjectURL(file);
+  };
+  
+  // Uruchom natywny aparat
+  input.click();
 }
 
 function closeCam() {
